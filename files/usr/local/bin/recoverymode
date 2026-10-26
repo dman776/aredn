@@ -1,0 +1,39 @@
+#!/bin/sh
+<<'LICENSE'
+  Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+  Copyright (C) 2022 Conrad Lara
+  See Contributors file for additional contributors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation version 3 of the License.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+LICENSE
+
+DHCPLANSECTION=$(uci show dhcp|grep interface=\'lan\'|sed "s/dhcp.\@dhcp\[\(.*\)\].interface=\'lan\'/\1/")
+
+logger "Recovery Mode: Resetting root password to: hsmm"
+/usr/local/bin/setpasswd hsmm
+
+logger "Recovery Mode: Restarting uhttpd"
+/etc/init.d/uhttpd restart
+
+if [ -n "$DHCPLANSECTION" ] ; then
+    logger "Recovery Mode: Enabling DHCP on lan interface"
+    /sbin/uci -c /etc/config.mesh -q set dhcp.@dhcp[$DHCPLANSECTION].ignore=0
+    uci -c /etc/config.mesh -q commit dhcp
+
+    logger "Recovery Mode: Restarting dnsmasq"
+    if [ ! -d "/tmp/hosts" ] ; then
+        mkdir /tmp/hosts
+    fi
+    /etc/init.d/dnsmasq restart
+fi

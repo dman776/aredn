@@ -1,0 +1,193 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+    const reService = /^([^|]+)\|1\|([^|]+)\|([^|]+)\|(\d+)\|(.*)$/;
+    const reLink = /^([^|]+)\|0\|\|([^|]+)\|\|$/;
+    const reType = /^(.+) \[([a-z]+)\]$/;
+
+    const services = [];
+    const devices = [];
+    const leases = {};
+    const valid = {};
+
+    const dhcp = configuration.getDHCP();
+
+    if (fs.access("/tmp/service-validation-state.json")) {
+        const svs = json(fs.readfile("/tmp/service-validation-state.json"));
+        for (let key in svs.valid) {
+            const n = split(key, "|");
+            valid[length(n) > 1 ? n[0] : key] = (svs.valid[key] > svs.when);
+        }
+    }
+    const svcs = uciMesh.get("setup", "services", "service") || [];
+    for (let i = 0; i < length(svcs); i++) {
+        const l = trim(svcs[i]);
+        const v = match(l, reService);
+        if (v) {
+            const reachable = valid[`${v[2]}://${v[3]}:${v[4]}/${v[5]}`] !== false;
+            if (reachable || auth.isAdmin) {
+                let type = "";
+                if (!reachable) {
+                    type += ` <div class="icon warning" title="Service cannot be reached"></div>`;
+                }
+                const v2 = match(v[1], reType);
+                if (v2) {
+                    v[1] = v2[1];
+                    type += ` <div class="icon ${v2[2]}" title="${v2[2]}"></div>`;
+                }
+                switch (v[4]) {
+                    case "80":
+                        push(services, `<div class="service"><a target="_blank" href="http://${v[3]}.local.mesh/${v[5]}" onclick="event.stopPropagation()">${v[1]}${type}</a></div>`);
+                        break;
+                    case "443":
+                        push(services, `<div class="service"><a target="_blank" href="https://${v[3]}.local.mesh/${v[5]}" onclick="event.stopPropagation()">${v[1]}${type}</a></div>`);
+                        break;
+                    default:
+                        push(services, `<div class="service"><a target="_blank" href="${v[2]}://${v[3]}.local.mesh:${v[4]}/${v[5]}" onclick="event.stopPropagation()">${v[1]}${type}</a></div>`);
+                        break;
+                }
+            }
+        }
+        else {
+            const k = match(l, reLink);
+            if (k) {
+                let type = "";
+                const k2 = match(k[1], reType);
+                if (k2) {
+                    k[1] = k2[1];
+                    type = ` <div class="icon ${k2[2]}" title="${k2[2]}"></div>`;
+                }
+                push(services, `<div class="service"><span>${k[1]}${type}</span></div>`);
+            }
+        }
+    }
+
+    if (dhcp.enabled) {
+        const leased = {};
+        f = fs.open("/tmp/dhcp.leases");
+        if (f) {
+            for (let l = f.read("line"); length(l); l = f.read("line")) {
+                const m = split(trim(l), " ");
+                if (length(m) === 5) {
+                    if (m[3] === "*") {
+                        leased[lc(m[1])] = { n: m[2], p: 0, s: auth.isAdmin, v: true };
+                    }
+                    else {
+                        leased[lc(m[1])] = { n: m[3], p: 0, s: auth.isAdmin, v: true };
+                    }
+                }
+            }
+            f.close();
+        }
+        const res = uciMesh.get("setup", "dhcpreservations", "reservation") || [];
+        const reR = /^([^ ]+) ([^ ]+) ([^ ]+) ?(.*)/;
+        for (let i = 0; i < length(res); i++) {
+            const v = match(trim(res[i]), reR);
+            if (v && (v[4] !== "#NOPROP" || auth.isAdmin)) {
+                const k = lc(v[1]);
+                const l = leased[k] || (leased[k] = { n: null, p: 0, s: true, v: false });
+                l.n = v[3];
+                l.s = true;
+                if (valid[`pseudo://${l.n}:80/`] === true) {
+                    l.v = true;
+                    l.p = 80;
+                }
+                else if (valid[`pseudo://${l.n}:443/`] === true) {
+                    l.v = true;
+                    l.p = 443;
+                }
+            }
+        }
+        for (let k in leased) {
+            const l = leased[k];
+            if (l.s) {
+                if (!l.v) {
+                    if (valid[lc(l.n)]) {
+                        push(devices, `<div class="device">${l.n}</div>`);
+                    }
+                    else if (auth.isAdmin) {
+                        push(devices, `<div class="device">${l.n} <div class="icon warning" title="Not found"></div></div>`);
+                    }
+                }
+                else {
+                    if (l.p === 80) {
+                        push(devices, `<div class="device"><a target="_blank" href="http://${l.n}.local.mesh" onclick="event.stopPropagation()">${l.n} <div class="icon link" title="Connect"></div></a></div>`);
+                    }
+                    else if (l.p === 443) {
+                        push(devices, `<div class="device"><a target="_blank" href="https://${l.n}.local.mesh" onclick="event.stopPropagation()">${l.n} <div class="icon link" title="Connect"></div></a></div>`);
+                    }
+                    else {
+                        push(devices, `<div class="device">${l.n}</div>`);
+                    }
+                }
+            }
+        }
+    }
+%}
+<div class="ctrl" hx-get="status/e/local-services" hx-target="#ctrl-modal">
+    <div class="section-title">Local Services</div>
+    <div class="section">
+    {%
+        if (length(services) === 0) {
+            print("None");
+        }
+        else {
+            print("<div class='cols'>");
+            for (let i = 0; i < length(services); i++) {
+                print(services[i]);
+            }
+            print("</div>");
+        }
+    %}
+    </div>
+</div>
+<hr>
+<div class="noctrl">
+    <div class="section-title">Local Devices</div>
+    <div class="section">
+    {%
+        if (length(devices) === 0) {
+            print("None");
+        }
+        else {
+            print("<div class='cols'>");
+            for (let i = 0; i < length(devices); i++) {
+                print(devices[i]);
+            }
+            print("</div>");
+        }
+    %}
+    </div>
+</div>

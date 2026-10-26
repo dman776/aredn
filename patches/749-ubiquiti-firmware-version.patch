@@ -1,0 +1,26 @@
+--- a/target/linux/ath79/image/generic-ubnt.mk
++++ b/target/linux/ath79/image/generic-ubnt.mk
+@@ -59,6 +59,7 @@
+   DEVICE_MODEL := LiteBeam AC
+   DEVICE_VARIANT := Gen2
+   DEVICE_PACKAGES := kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt
++  UBNT_VERSION := 8.7.4
+ endef
+ TARGET_DEVICES += ubnt_litebeam-ac-gen2
+ 
+@@ -83,6 +84,7 @@
+   DEVICE_MODEL := NanoBeam AC
+   DEVICE_VARIANT := Gen2
+   DEVICE_PACKAGES += kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt rssileds
++  UBNT_VERSION := 8.7.4
+ endef
+ TARGET_DEVICES += ubnt_nanobeam-ac-gen2
+ 
+@@ -182,6 +182,7 @@
+   DEVICE_MODEL := PowerBeam 5AC
+   DEVICE_VARIANT := Gen2
+   DEVICE_PACKAGES := kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt rssileds
++  UBNT_VERSION := 8.7.4
+ endef
+ TARGET_DEVICES += ubnt_powerbeam-5ac-gen2
+ 

@@ -1,0 +1,839 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024,2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+if (request.env.REQUEST_METHOD === "PUT") {
+    configuration.prepareChanges();
+    const modemap = {
+        "0": radios.RADIO_OFF,
+        "1": radios.RADIO_MESH,
+        "4": radios.RADIO_MESHPTMP,
+        "5": radios.RADIO_MESHPTP,
+        "6": radios.RADIO_MESHSTA,
+        "2": radios.RADIO_LAN,
+        "3": radios.RADIO_WAN
+    };
+    const wlan = radios.getConfiguration();
+    let radio0_mode = modemap[request.args.radio0_mode] || wlan[0].mode.mode;
+    let radio1_mode = modemap[request.args.radio1_mode] || wlan[1]?.mode?.mode;
+    if (radio0_mode && radio1_mode && (hardware.supportsFeature("only_one_radio") || (radio0_mode == radios.RADIO_WAN && radio1_mode == radios.RADIO_WAN))) {
+        if ("radio0_mode" in request.args) {
+            radio1_mode = radios.RADIO_OFF;
+        }
+        else if ("radio1_mode" in request.args) {
+            radio0_mode = radios.RADIO_OFF;
+        }
+    }
+    switch (radio0_mode) {
+        case radios.RADIO_MESH:
+        case radios.RADIO_MESHPTMP:
+        case radios.RADIO_MESHPTP:
+        case radios.RADIO_MESHSTA:
+            if (configuration.setSettingAsString("radio0_mode", radio0_mode)) {
+                configuration.setSettingAsString("radio0_bandwidth", wlan[0].mode.bandwidth || wlan[0].def.bandwidth);
+                configuration.setSettingAsString("radio0_ssid", "AREDN");
+                let chan = wlan[0].mode.channel || wlan[0].def.channel;
+                const chanfilter = radio0_mode === radios.RADIO_MESHPTMP || radio0_mode === radios.RADIO_MESHPTP || radio0_mode ===  radios.RADIO_MESHSTA ? wlan[0].managedOOB : null;
+                if (chanfilter && index(chanfilter, chan) !== -1) {
+                    chan = chanfilter[length(chanfilter) - 1] + 1;
+                }
+                configuration.setSettingAsString("radio0_channel", chan);
+                configuration.setSettingAsList("radio0_channels", []);
+            }
+            if ("radio0_channel" in request.args) {
+                let channel = request.args.radio0_channel;
+                if (type(channel) === "array") {
+                    channel = sort(uniq(channel), (a, b) => int(a) - int(b));
+                    configuration.setSettingAsList("radio0_channels", length(channel) > 1 ? channel : []);
+                    configuration.setSettingAsString("radio0_channel", channel[0]);
+
+                }
+                else {
+                    configuration.setSettingAsList("radio0_channels", []);
+                    configuration.setSettingAsString("radio0_channel", channel);
+                }
+            }
+            if ("radio0_peer" in request.args) {
+                configuration.setSettingAsString("radio0_peer", request.args.radio0_peer);
+            }
+            if ("radio0_ssid" in request.args) {
+                configuration.setSettingAsString("radio0_ssid", request.args.radio0_ssid);
+            }
+            if ("radio0_bandwidth" in request.args) {
+                configuration.setSettingAsString("radio0_bandwidth", request.args.radio0_bandwidth);
+            }
+            if ("radio0_txpower" in request.args) {
+                configuration.setSettingAsString("radio0_txpower", request.args.radio0_txpower);
+            }
+            if ("radio0_distance" in request.args) {
+                configuration.setSettingAsString("radio0_distance", int(units.distance2meters(request.args.radio0_distance) || wlan[0].maxdistance));
+            }
+            break;
+        case radios.RADIO_LAN:
+            if (configuration.setSettingAsString("radio0_mode", radio0_mode)) {
+                configuration.setSettingAsString("radio0_channel", wlan[0].mode.channel || wlan[0].def.channel);
+                configuration.setSettingAsList("radio0_channels", []);
+                if (hexdec(configuration.getSettingAsString("radio0_ssid")) === null) {
+                    configuration.setSettingAsString("radio0_ssid", hexenc("AREDN-LAN"));
+                    configuration.setSettingAsString("radio0_encryption", "none");
+                    configuration.setSettingAsString("radio0_key", hexenc("AREDNmesh"));
+                }
+            }
+            if ("radio0_channel" in request.args) {
+                configuration.setSettingAsString("radio0_channel", request.args.radio0_channel);
+                configuration.setSettingAsList("radio0_channels", []);
+            }
+            if ("radio0_password" in request.args) {
+                configuration.setSettingAsString("radio0_key", hexenc(request.args.radio0_password));
+            }
+            if ("radio0_ssid" in request.args) {
+                configuration.setSettingAsString("radio0_ssid", hexenc(request.args.radio0_ssid));
+            }
+            if ("radio0_bandwidth" in request.args) {
+                configuration.setSettingAsString("radio0_bandwidth", request.args.radio0_bandwidth);
+            }
+            if ("radio0_encryption" in request.args) {
+                const encrypt = [ "psk", "psk2", "none" ];
+                configuration.setSettingAsString("radio0_encryption", encrypt[int(request.args.radio0_encryption)]);
+            }
+            break;
+        case radios.RADIO_WAN:
+            if (configuration.setSettingAsString("radio0_mode", radio0_mode)) {
+                if (hexdec(configuration.getSettingAsString("radio0_ssid")) === null) {
+                    configuration.setSettingAsString("radio0_ssid", hexenc("MyWiFi"));
+                    configuration.setSettingAsString("radio0_key", "");
+                }
+            }
+            if ("radio0_ssid" in request.args) {
+                configuration.setSettingAsString("radio0_ssid", hexenc(request.args.radio0_ssid));
+            }
+            if ("radio0_password" in request.args) {
+                configuration.setSettingAsString("radio0_key", hexenc(request.args.radio0_password));
+            }
+            break;
+        case radios.RADIO_OFF:
+            configuration.setSettingAsString("radio0_mode", radios.RADIO_OFF);
+            break;
+        default:
+            break;
+    }
+    switch (radio1_mode) {
+        case radios.RADIO_MESH:
+        case radios.RADIO_MESHPTMP:
+        case radios.RADIO_MESHPTP:
+        case radios.RADIO_MESHSTA:
+            if (configuration.setSettingAsString("radio1_mode", radio1_mode)) {
+                configuration.setSettingAsString("radio1_bandwidth", wlan[1].mode.bandwidth || wlan[1].def.bandwidth);
+                configuration.setSettingAsString("radio1_ssid", "AREDN");
+                let chan = wlan[1].mode.channel || wlan[1].def.channel;
+                const chanfilter = radio1_mode === radios.RADIO_MESHPTMP || radio1_mode === radios.RADIO_MESHPTP || radio1_mode ===  radios.RADIO_MESHSTA ? wlan[1].managedOOB : null;
+                if (chanfilter && index(chanfilter, chan) !== -1) {
+                    chan = chanfilter[length(chanfilter) - 1] + 1;
+                }
+                configuration.setSettingAsString("radio1_channel", chan);
+                configuration.setSettingAsList("radio1_channels", []);
+            }
+            if ("radio1_channel" in request.args) {
+                let channel = request.args.radio1_channel;
+                if (type(channel) === "array") {
+                    channel = sort(uniq(channel), (a, b) => int(a) - int(b));
+                    configuration.setSettingAsList("radio1_channels", length(channel) > 1 ? channel : []);
+                    configuration.setSettingAsString("radio1_channel", channel[0]);
+
+                }
+                else {
+                    configuration.setSettingAsList("radio1_channels", []);
+                    configuration.setSettingAsString("radio1_channel", channel);
+                }
+            }
+            if ("radio1_peer" in request.args) {
+                configuration.setSettingAsString("radio1_peer", request.args.radio1_peer);
+            }
+            if ("radio1_ssid" in request.args) {
+                configuration.setSettingAsString("radio1_ssid", request.args.radio1_ssid);
+            }
+            if ("radio1_bandwidth" in request.args) {
+                configuration.setSettingAsString("radio1_bandwidth", request.args.radio1_bandwidth);
+            }
+            if ("radio1_txpower" in request.args) {
+                configuration.setSettingAsString("radio1_txpower", request.args.radio1_txpower);
+            }
+            if ("radio1_distance" in request.args) {
+                configuration.setSettingAsString("radio1_distance", int(units.distance2meters(request.args.radio1_distance) || wlan[1].maxdistance));
+            }
+            break;
+        case radios.RADIO_LAN:
+            if (configuration.setSettingAsString("radio1_mode", radio1_mode)) {
+                configuration.setSettingAsString("radio1_channel", wlan[1].mode.channel || wlan[1].def.channel);
+                configuration.setSettingAsList("radio1_channels", []);
+                if (hexdec(configuration.getSettingAsString("radio1_ssid")) === null) {
+                    configuration.setSettingAsString("radio1_ssid", hexenc("AREDN-LAN"));
+                    configuration.setSettingAsString("radio1_encryption", "none");
+                    configuration.setSettingAsString("radio1_key", hexenc("AREDNmesh"));
+                }
+            }
+            if ("radio1_channel" in request.args) {
+                configuration.setSettingAsString("radio1_channel", request.args.radio1_channel);
+                configuration.setSettingAsList("radio1_channels", []);
+            }
+            if ("radio1_password" in request.args) {
+                configuration.setSettingAsString("radio1_key", hexenc(request.args.radio1_password));
+            }
+            if ("radio1_ssid" in request.args) {
+                configuration.setSettingAsString("radio1_ssid", hexenc(request.args.radio1_ssid));
+            }
+            if ("radio1_bandwidth" in request.args) {
+                configuration.setSettingAsString("radio1_bandwidth", request.args.radio1_bandwidth);
+            }
+            if ("radio1_encryption" in request.args) {
+                const encrypt = [ "psk", "psk2", "none" ];
+                configuration.setSettingAsString("radio1_encryption", encrypt[int(request.args.radio1_encryption)]);
+            }
+            break;
+        case radios.RADIO_WAN:
+            if (configuration.setSettingAsString("radio1_mode", radio1_mode)) {
+                if (hexdec(configuration.getSettingAsString("radio1_ssid")) === null) {
+                    configuration.setSettingAsString("radio1_ssid", hexenc("MyWiFi"));
+                    configuration.setSettingAsString("radio1_key", "");
+                }
+            }
+            if ("radio1_ssid" in request.args) {
+                configuration.setSettingAsString("radio1_ssid", hexenc(request.args.radio1_ssid));
+            }
+            if ("radio1_password" in request.args) {
+                configuration.setSettingAsString("radio1_key", hexenc(request.args.radio1_password));
+            }
+            break;
+        case radios.RADIO_OFF:
+            configuration.setSettingAsString("radio1_mode", radios.RADIO_OFF);
+            break;
+        default:
+            break;
+    }
+    if ("radio_antenna" in request.args) {
+        uciMesh.set("aredn", "@location[0]", "antenna", request.args.radio_antenna);
+    }
+    if ("radio_azimuth" in request.args) {
+        uciMesh.set("aredn", "@location[0]", "azimuth", request.args.radio_azimuth);
+    }
+    if ("radio_height" in request.args) {
+        uciMesh.set("aredn", "@location[0]", "height", request.args.radio_height);
+    }
+    if ("radio_elevation" in request.args) {
+        uciMesh.set("aredn", "@location[0]", "elevation", request.args.radio_elevation);
+    }
+    if ("radio_polarization" in request.args) {
+        uciMesh.set("aredn", "@location[0]", "polarization", request.args.radio_polarization);
+    }
+    if ("radio_vlan" in request.args) {
+        configuration.setSettingAsString("radio_vlan", request.args.radio_vlan);
+    }
+    uciMesh.commit("aredn");
+    configuration.saveSettings();
+    print(_R("changes"));
+    return;
+}
+if (request.env.REQUEST_METHOD === "DELETE") {
+    configuration.revertModalChanges();
+    print(_R("changes"));
+    return;
+}
+%}
+{% const wlan = radios.getConfiguration(); %}
+<div class="dialog radio-and-antenna">
+    {{_R("dialog-header", "Radios &amp; Antennas")}}
+    <div>
+    {{_R("dialog-messages")}}
+    {%
+        const hasradios = length(wlan) > 0;
+        if (hasradios) {
+            const modemap = {
+                "mesh": 1,
+                "meshap": 4,
+                "meshptp": 5,
+                "meshsta": 6,
+                "lan": 2,
+                "wan": 3
+            };
+            let first = true;
+            for (let w = 0; w < length(wlan); w++) {
+                if (wlan[w].disabled) {
+                    continue;
+                }
+                const prefix = `radio${w}_`;
+                if (!first) {
+                    print("<hr>");
+                }
+                const mode = wlan[w].mode.mode;
+                const ismesh = (mode == "mesh" || mode == "meshap" || mode == "meshptp" || mode == "meshsta");
+                // Default SSID is different depending on the mode
+                const ssid_decoded = hexdec(wlan[w].mode.ssid);
+                const ssid_lan = ismesh || !ssid_decoded ? "AREDN-LAN" : ssid_decoded;
+                const ssid_wan = ismesh || !ssid_decoded ? "MyWiFi" : ssid_decoded;
+                const ssid_mesh = !ismesh || ssid_decoded ? "AREDN" : wlan[w].mode.ssid;
+                const channel = wlan[w].mode.channel || wlan[w].def.channel;
+                const channels = wlan[w].mode.channels;
+                const bandwidth = wlan[w].mode.bandwidth || wlan[w].def.bandwidth;
+                const txpower = wlan[w].mode.txpower;
+                const encryption = wlan[w].mode.encryption || "none";
+                // Default key is different between LAN and WAN
+                const key_decoded = hexdec(wlan[w].mode.key);
+                const key_lan = !ismesh && key_decoded ? key_decoded : "AREDNmesh";
+                const key_wan = !ismesh && key_decoded ? key_decoded : "";
+                const macaddress = wlan[w].macaddress;
+                const ishalow = hardware.getRadioType(wlan[w].iface) === "halow";
+                const nochan = mode === radios.RADIO_MESH && !ishalow;
+    %}
+        <div id="radio{{w}}" class="hideable compact" data-hideable="{{modemap[mode] || 0}}">
+            <div class="cols">
+                <div>
+                    <div class="o" {{length(wlan) > 1 ? "style='font-weight:bold'" : ""}}>Radio {{wlan[w].def?.band ?? ''}}</div>
+                    <div class="m">Radio purpose</div>
+                </div>
+                <div style="flex:0">
+                    <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}mode" {{_R("hideable-onselect")}}>
+                        <option value="0" {{mode === radios.RADIO_OFF ? "selected" : ""}}>Off</option>
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "mesh")) { %}
+                        <option value="1" {{mode === radios.RADIO_MESH ? "selected" : ""}}>Mesh</option>
+                        {% } %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshap")) { %}
+                        <option value="4" {{mode === radios.RADIO_MESHPTMP ? "selected" : ""}}>Mesh PtMP</option>
+                        {% } %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshptp")) { %}
+                        <option value="5" {{mode === radios.RADIO_MESHPTP ? "selected" : ""}}>Mesh PtP</option>
+                        {% } %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "meshsta")) { %}
+                        <option value="6" {{mode === radios.RADIO_MESHSTA ? "selected" : ""}}>Mesh Station</option>
+                        {% } %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "lan")) { %}
+                        <option value="2" {{mode === radios.RADIO_LAN ? "selected" : ""}}>LAN Hotspot</option>
+                        {% } %}
+                        {% if (hardware.supportsFeature("wifi-mode", wlan[w].iface, "wan")) { %}
+                        <option value="3" {{mode === radios.RADIO_WAN ? "selected" : ""}}>WAN Client</option>
+                        {% } %}
+                    </select>
+                </div>
+            </div>
+            {{_H("Select the purpose of the radio. Each radio can be assigned to a specific purpose, but devices with multiple radios
+            cannot have the same purpose for multiple radios (except <b>off</b>).")}}
+            <div class="cols" {{length(wlan) > 1 ? "style='padding-left:10px'" : ""}}>
+                <div>
+                    <div class="o">MAC Address</div>
+                    <div class="m">Mac address</div>
+                </div>
+                <div style="flex:0;white-space:nowrap">
+                    <span>{{macaddress}}</span>
+                </div>
+            </div>
+            {{_H("MAC address of this radio.")}}
+            <div class="hideable1 hideable4 hideable5 hideable6" {{length(wlan) > 1 ? "style='padding-left:10px'" : ""}}>
+                <div class="cols hideable1 hideable4 hideable5">
+                    <div>
+                        <div class="o">Channel</div>
+                        <div class="m">Channel and frequency of this connection</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}channel" style="direction:ltr" class="mesh-channel">
+                        {%
+                            const chanfilter = mode === radios.RADIO_MESHPTMP || mode === radios.RADIO_MESHPTP || mode ===  radios.RADIO_MESHSTA ? wlan[w].managedOOB : null;
+                            const achannels = wlan[w].channels[bandwidth] || [];
+                            for (let i = 0; i < length(achannels); i++) {
+                                if (!chanfilter || index(chanfilter, achannels[i].number) === -1) {
+                                    print(`<option value="${achannels[i].number}" ${achannels[i].number == channel ? "selected" : ""}>${achannels[i].label}</option>`);
+                                }
+                            }
+                        %}
+                        </select>
+                    </div>
+                </div>
+                <div class="cols hideable1 hideable4 hideable5">
+                    {{_H("Select the central channel/frequency for the radio.")}}
+                </div>
+                <div class="cols hideable6 sta-channels" hx-include="this">
+                    <div>
+                        <div class="o">Channels</div>
+                        <div class="m">Channels and frequencies of this connection</div>
+                    </div>
+                    <div style="flex:0" class="channels">
+                        <div style="white-space:nowrap">
+                            {%
+                                const chanfilter = mode === radios.RADIO_MESHPTMP || mode === radios.RADIO_MESHPTP || mode ===  radios.RADIO_MESHSTA ? wlan[w].managedOOB : null;
+                                const achannels = wlan[w].channels[bandwidth] || [];
+                            %}
+                            <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}channel" style="direction:ltr" class="mesh-channel">
+                            {%
+                                for (let i = 0; i < length(achannels); i++) {
+                                    if (!chanfilter || index(chanfilter, achannels[i].number) === -1) {
+                                        print(`<option value="${achannels[i].number}" ${achannels[i].number == channel ? "selected" : ""}>${achannels[i].label}</option>`);
+                                    }
+                                }
+                            %}
+                            </select>
+                            <button>+</button>
+                        </div>
+                        {%
+                            if (channels) {
+                                for (let xchannel in channels) {
+                                    if (xchannel != channel) {
+                        %}
+                        <div style="white-space:nowrap;margin-bottom:4px" class="xtra-channel">
+                            <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}channel" style="direction:ltr" class="mesh-channel">
+                        {%
+                                        for (let i = 0; i < length(achannels); i++) {
+                                            if (!chanfilter || index(chanfilter, achannels[i].number) === -1) {
+                                                print(`<option value="${achannels[i].number}" ${achannels[i].number == xchannel ? "selected" : ""}>${achannels[i].label}</option>`);
+                                            }
+                                        }
+                        %}
+                            </select>
+                            <button>-</button>
+                        </div>
+                        {%
+                                    }
+                                }
+                            } 
+                        %}
+                    </div>
+                </div>
+                <div class="cols hideable6">
+                    {{_H("Select the central channels/frequencies for the radio. When more than one is selected the node will connect
+                          to the strongest signal.")}}
+                </div>
+                <div class="cols">
+                    <div>
+                        <div class="o">Channel Width</div>
+                        <div class="m">Channel bandwidth</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}bandwidth" hx-include=".mesh-channel[name='{{prefix}}channel']" style="direction:ltr">
+                        {%
+                            for (let i = 0; i < length(wlan[w].bws); i++) {
+                                print(`<option value="${wlan[w].bws[i]}" ${wlan[w].bws[i] == bandwidth ? "selected" : ""}>${wlan[w].bws[i]} MHz</option>`);
+                            }
+                        %}
+                        </select>
+                    </div>
+                </div>
+                {{_H("Select the bandwidth of the radio. Be aware that larger bandwidth settings will consume more channels. Avoid overlapping
+                channels as this will impact performance.")}}
+                <div class="cols peer hideable5">
+                    <div>
+                        <div class="o">Peer Node</div>
+                        <div class="m">MAC a&zwnj;ddress of remote Mesh Station</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}peer" type="text" required placeholder="mac a&zwnj;ddress" pattern="([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]" hx-validate="true" value="{{configuration.getSettingAsString(`${prefix}peer`, "")}}">
+                    </div>
+                </div>
+                <div class="peer hideable5">
+                {{_H("Specify the MAC a&zwnj;ddress of the node which is allowed to peer with this node. The other node must be configured as a Mesh Station.")}}
+                </div>
+                <div class="cols">
+                    <div>
+                        <div class="o">Transmit Power</div>
+                        <div class="m">Transmit power</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}txpower">
+                        {%
+                            for (let i = wlan[w].txmaxpower; i > 0; i--) {
+                                print(`<option value="${i}" ${i == txpower ? "selected" : ""}>${i + wlan[w].txpoweroffset}</option>`);
+                            }
+                        %}
+                        </select>
+                    </div>
+                </div>
+                {{_H("Select the transmission power for the radio. Ideally use only enough power to maintain the link at the capacity required.")}}
+                <div class="cols">
+                    <div>
+                        <div class="o">SSID</div>
+                        <div class="m">AREDN mesh identifier</div>
+                    </div>
+                    <div style="flex:0;white-space:nowrap">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}ssid" type="text" size="10" maxlength="20" pattern="[^!#;+\]\/"\t\-][^+\]\/"\t\-]{0,18}[^ !#;+\]\/"\t\-]$|^[^ !#;+\]\/"\t\-]" hx-validate="true" value="{{ssid_mesh}}"><span style="color:var(--ctrl-modal-fg-color)">{{nochan ? "" : `-${channels ? "X" : channel}`}}-{{bandwidth}}-v3</span>
+                    </div>
+                </div>
+                {% if (hardware.supportsFeature("max-distance", wlan[w].iface)) { %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Maximum Distance</div>
+                        <div class="m">Distance to farthest neighbor in {{units.distanceUnit()}}</div>
+                    </div>
+                    <div style="flex:0">
+                        {% let maxdistance = wlan[w].mode.distance;
+                        if (maxdistance > 0) {
+                            maxdistance = util.round(10 * units.meters2distance(maxdistance)) / 10.0;
+                        }
+                        else {
+                            maxdistance = "";
+                        } %}
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}distance" type="text" size="3" placeholder="{{util.round(10 * units.meters2distance(wlan[w].maxdistance)) / 10.0}}" pattern="\d+(\.\d)?" hx-validate="true" value="{{maxdistance}}">
+                    </div>
+                </div>
+                {{_H("Set the farthest distance to the most remote neighbor. This distance is used by the radio when it cannot determine
+                how far a neighbor radio is, or when no radios are connected. Setting this distance appropriately is extremely important
+                when radios are initially connecting and their location is not yet known. In particular, a too low value can result
+                in radios failing to connect when they otherwise should.")}}
+                {% } %}
+            </div>
+            <div class="hideable2" {{length(wlan) > 1 ? "style='padding-left:10px'" : ""}}>
+                {{_H("In LAN Hotpot mode, the WiFi acts as a wireless hotspot. Any device connecting will appear as a LAN device attached to the node.")}}
+                <div class="cols">
+                    <div>
+                        <div class="o">SSID</div>
+                        <div class="m">Hotspot SSID</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}ssid" type="text" size="10" maxlength="32" pattern=[^!#;+\]\/"\t][^+\]\/"\t]{0,30}[^ !#;+\]\/"\t]$|^[^ !#;+\]\/"\t]" hx-validate="true" value="{{ssid_lan}}">
+                    </div>
+                </div>
+                <div class="cols">
+                    <div>
+                        <div class="o">Channel</div>
+                        <div class="m">Hotspot channel</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}channel" class="lan">
+                        {%
+                            const hotchans = wlan[w].channels[ishalow ? `${bandwidth}` : "20"] || [];
+                            for (let i = 0; i < length(hotchans); i++) {
+                                print(`<option value="${hotchans[i].number}" ${hotchans[i].number == channel ? "selected" : ""}>${hotchans[i].number}</option>`);
+                            }
+                        %}
+                        </select>
+                    </div>
+                </div>
+                {% if (ishalow) { %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Channel Width</div>
+                        <div class="m">Channel bandwidth</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}bandwidth" hx-include=".mesh-channel[name='{{prefix}}channel']" style="direction:ltr" class="lan">
+                        {%
+                            for (let i = 0; i < length(wlan[w].bws); i++) {
+                                print(`<option value="${wlan[w].bws[i]}" ${wlan[w].bws[i] == bandwidth ? "selected" : ""}>${wlan[w].bws[i]} MHz</option>`);
+                            }
+                        %}
+                        </select>
+                    </div>
+                </div>
+                {% } %}
+                <div class="hideable" data-hideable="{{encryption == "psk" ? 0 : encryption == "psk2" ? 1 : 2}}">
+                    <div class="cols">
+                        <div>
+                            <div class="o">Encryption</div>
+                            <div class="m">Encryption algorithm</div>
+                        </div>
+                        <div style="flex:0">
+                            <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="{{prefix}}encryption" {{_R("hideable-onselect")}}>
+                                <option value="0" {{encryption == "psk" ? "selected" : ""}}>WPA PSK</option>
+                                <option value="1" {{encryption == "psk2" ? "selected" : ""}}>WPA2 PSK</option>
+                                <option value="2" {{encryption == "none" ? "selected" : ""}}>None</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="hideable0 hideable1">
+                        <div class="cols">
+                            <div>
+                                <div class="o">Password</div>
+                                <div class="m">Hotspot password</div>
+                            </div>
+                            <div class="password-toggle" style="flex:0">
+                                <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}password" type="password" required size="10" minlength="8" maxlength="32" hx-validate="true" value="{{key_lan}}"><button class="icon eye"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="hideable3" {{length(wlan) > 1 ? "style='padding-left:10px'" : ""}}>
+                {{_H("In WAN Client mode, the WiFi connection is used to connect to another wireless network. This network is expected to provide
+                access to the Internet.")}}
+                <div class="cols">
+                    <div>
+                        <div class="o">SSID</div>
+                        <div class="m">WAN client</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}ssid" type="text" size="10" maxlength="32" pattern='[^!#;+\]\/"\t][^+\]\/"\t]{0,30}[^ !#;+\]\/"\t]$|^[^ !#;+\]\/"\t]' hx-validate="true" value="{{ssid_wan}}">
+                    </div>
+                </div>
+                <div class="cols">
+                    <div>
+                        <div class="o">Password</div>
+                        <div class="m">Client password</div>
+                    </div>
+                    <div class="password-toggle" style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="{{prefix}}password" type="password" size="10" minlength="8" maxlength="32" hx-validate="true" value="{{key_wan}}"><button class="icon eye"></button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div {{length(wlan) > 1 ? "style='padding-left:10px'" : ""}}>
+                {% if (first || wlan[w].ants) { %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Antenna</div>
+                        <div class="m">Antenna</div>
+                    </div>
+                    <div style="flex:0;white-space:nowrap">
+                        {% if (!wlan[w].ants) { %}
+                            <span></span>
+                        {% } else if (length(wlan[w].ants) === 1) { %}
+                            <span>{{wlan[w].ants[0].description}}<span>
+                        {% } else { %}
+                            <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="radio_antenna">
+                            {%
+                                const model = wlan[w].ant?.model;
+                                for (let i = 0; i < length(wlan[w].ants); i++) {
+                                    print(`<option value="${wlan[w].ants[i].model}" ${wlan[w].ants[i].model == model ? "selected" : ""}>${wlan[w].ants[i].description}</option>`);
+                                }
+                            %}
+                            </select>
+                        {% } %}
+                    </div>
+                </div>
+                {% if (length(wlan[w].ants) > 1) { %}
+                {{_H("Select the external antenna attached to the primary radio.")}}
+                {% } %}
+                {% } %}
+                {% if (first) { %}
+                {%
+                const antennaPol = hardware.getAntennaPolarization(wlan[w].iface);
+                if (antennaPol) { %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Polarization</div>
+                        <div class="m">Antenna polarization</div>
+                    </div>
+                    <div style="flex:0">
+                        <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="radio_polarization">
+                            <option value="">-</option>
+                            <option value="vertical" {{antennaPol === "vertical" ? "selected" : ""}}>Vertical</option>
+                            <option value="horizontal" {{antennaPol === "horizontal" ? "selected" : ""}}>Horizontal</option>
+                        </select>
+                    </div>
+                </div>
+                {{_H("The antenna polization determines how the signal propagates. Radios should match polarization for best performance.")}}
+                {% } %}
+                {% if (!(length(wlan[w].ants) === 1 && wlan[w].ants[0].beamwidth === 360)) { %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Azimuth</div>
+                        <div class="m">Antenna azimuth in degrees</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="radio_azimuth" type="text" size="10" pattern="(\d|[1-9]\d|[12]\d{2}|3[0-5]\d|360)(\.\d)?" hx-validate="true" value="{{uciMesh.get("aredn", "@location[0]", "azimuth")}}">
+                    </div>
+                </div>
+                {{_H("The azimuth, or heading, of the primary radio antenna measured in degrees (0 to 360) clockwise from north.")}}
+                {% } %}
+                <div class="cols">
+                    <div>
+                        <div class="o">Height</div>
+                        <div class="m">Antenna height above ground in meters</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="radio_height" type="text" size="10" pattern="\d+(\.\d+)?" hx-validate="true" value="{{uciMesh.get("aredn", "@location[0]", "height")}}">
+                    </div>
+                </div>
+                {{_H("The height of the antenna above ground level in meters. This is usually the height up a tower or a building.")}}
+                <div class="cols">
+                    <div>
+                        <div class="o">Elevation</div>
+                        <div class="m">Antenna elevation in degrees</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="radio_elevation" type="text" size="10" pattern="(-[1-9]|-?[1-8]\d|-?90|\d)(\.\d)?" hx-validate="true" value="{{uciMesh.get("aredn", "@location[0]", "elevation")}}">
+                    </div>
+                </div>
+                {{_H("Elevation of the antenna, measured in degrees (-90 to 90), below (less than zero) or above the horizontal. Some antennas include electronic
+                downtilt. Any such offset should be included in the number entered here.")}}
+                {% } %}
+            </div>
+        </div>
+    {%
+                first = false;
+            }
+        }
+        else {
+    %}
+        <div style="padding-bottom:24px">No Radios</div>
+    {% } %}
+    {% if (hardware.supportsFeature("vlanrf")) { %}
+        {{_R("dialog-advanced")}}
+        <div>
+        {% if (includeAdvanced) { %}
+            <div class="cols">
+                <div>
+                    <div class="o">Radio VLAN</div>
+                    <div class="m">VLAN used to bridge to a local node</div>
+                </div>
+                <div style="flex:0">
+                    <input hx-put="{{request.env.REQUEST_URI}}" name="radio_vlan" type="text" size="5" placeholder="{{3700 + int(split(configuration.getDefaultIP(), ".")[3])}}" pattern="([15-9]|[1-9][0-9]{1,2}|[1-3][0-9]{3}|40[0-8][0-9]|409[0-5])" hx-validate="true" value="{{configuration.getSettingAsString("radio_vlan", "")}}">
+                </div>
+            </div>
+            {{_H("VLAN used to directly bridge this radio to another local node. This lets that node directly send traffic through this
+                  radio, bypassing its routing and firewall, to improve bandwidth and latency.")}}
+        {% } %}
+        </div>
+    {% } %}
+    </div>
+    {{_R("dialog-footer")}}
+    <script>
+    (function(){
+        {{_R("open")}}
+    {% if (hardware.getRadioIntf("wlan0")?.simo) { %}
+        dialogMessage.success("<center>This is a SIMO radio. You will only get half the expected bandwidth.</center>");
+    {% } %}
+    {%
+    for (let w = 0; w < length(wlan); w++) { %}
+        const radio{{w}} = htmx.find("#ctrl-modal .dialog.radio-and-antenna select[name=radio{{w}}_mode]");
+        const chan{{w}} = htmx.find("#ctrl-modal .dialog.radio-and-antenna select[name=radio{{w}}_channel]");
+        const lanchan{{w}} = htmx.find("#ctrl-modal .dialog.radio-and-antenna select[name=radio{{w}}_channel].lan");
+        const stachans{{w}} = htmx.find("#ctrl-modal .dialog.radio-and-antenna #radio{{w}} .sta-channels");
+        const stachan{{w}} = htmx.find(stachans{{w}}, "select[name=radio{{w}}_channel]");
+        const bws{{w}} = htmx.find(`#ctrl-modal .dialog.radio-and-antenna select[name=radio{{w}}_bandwidth]`);
+        const lanbws{{w}} = htmx.find(`#ctrl-modal .dialog.radio-and-antenna select[name=radio{{w}}_bandwidth].lan`);
+        const bwssid{{w}} = htmx.find(`#ctrl-modal .dialog.radio-and-antenna input[name=radio{{w}}_ssid] + span`);
+        const halow{{w}} = {{hardware.getRadioType(wlan[w].iface) === "halow"}};
+        function change{{w}}(e) {
+            const bandwidth = parseInt(e.target == lanbws{{w}} ? lanbws{{w}}.value : bws{{w}}.value);
+            const channel = parseInt(e.target === chan{{w}} ? chan{{w}}.value : stachan{{w}}.value);
+            let options = "";
+            const chanfilter = radio{{w}}.value == "4" || radio{{w}}.value == "5" || radio{{w}}.value == "6" ? {{wlan[w].managedOOB || []}} : null;
+            const channels = ({{wlan[w].channels || []}})[bandwidth] || [];
+            let nchannel = null;
+            for (let i = 0; i < channels.length; i++) {
+                if (!chanfilter || chanfilter.indexOf(channels[i].number) === -1) {
+                    if (channels[i].number == channel) {
+                        nchannel = channel;
+                        options += `<option value="${channels[i].number}" selected>${channels[i].label}</option>`;
+                    }
+                    else {
+                        if (!nchannel) {
+                            nchannel = channels[i].number;
+                        }
+                        options += `<option value="${channels[i].number}">${channels[i].label}</option>`;
+                    }
+                }
+            }
+            chan{{w}}.value = nchannel;
+            chan{{w}}.innerHTML = options;
+            stachan{{w}}.value = nchannel;
+            stachan{{w}}.innerHTML = options;
+            if (lanchan{{w}}) {
+                lanchan{{w}}.value = nchannel;
+                lanchan{{w}}.innerHTML = options;
+            }
+            if (e.target == radio{{w}} || e.target == bws{{w}} || e.target == lanbws{{w}}) {
+                const xtra = htmx.findAll(stachans{{w}}, ".xtra-channel");
+                for (let i = 0; i < xtra.length; i++) {
+                    xtra[i].remove();
+                }
+            }
+            if (radio{{w}}.value == "4" || radio{{w}}.value == "5" || (halow{{w}} && radio{{w}}.value == "1")) {
+                bwssid{{w}}.innerHTML = `-${nchannel}-${bandwidth}-v3`;
+            }
+            else if (radio{{w}}.value == "6") {
+                if (htmx.findAll(stachans{{w}}, "select[name=radio{{w}}_channel]").length === 1) {
+                    bwssid{{w}}.innerHTML = `-${nchannel}-${bandwidth}-v3`;
+                }
+                else {
+                    bwssid{{w}}.innerHTML = `-X-${bandwidth}-v3`;
+                }
+            }
+            else {
+                bwssid{{w}}.innerHTML = `-${bandwidth}-v3`;
+            }
+        }
+        function click{{w}}(e) {
+            if (e.target.nodeName === "BUTTON") {
+                switch (e.target.innerText) {
+                    case "+":
+                    {
+                        let xchan = `<div style="white-space:nowrap;margin-bottom:4px" class="xtra-channel">
+                            <select hx-put="{{request.env.REQUEST_URI}}" hx-swap="none" name="radio{{w}}_channel" style="direction:ltr" class="mesh-channel">`;
+                        const bandwidth = parseInt(bws{{w}}.value);
+                        const channels = ({{wlan[w].channels || []}})[bandwidth] || [];
+                        const chanfilter = {{wlan[w].managedOOB || []}};
+                        for (let i = 0; i < channels.length; i++) {
+                            if (!chanfilter || chanfilter.indexOf(channels[i].number) === -1) {
+                                xchan += `<option value="${channels[i].number}">${channels[i].label}</option>`;
+                            }
+                        }
+                        xchan += `</select> <button>-</button></div>`;
+                        const div = document.createElement("div");
+                        div.innerHTML = xchan;
+                        htmx.process(htmx.find(stachans{{w}}, ".channels").appendChild(div.firstElementChild));
+                        break;
+                    }
+                    case "-":
+                        htmx.closest(e.target, ".xtra-channel").remove();
+                        break;
+                    default:
+                        break;
+                }
+                htmx.trigger(stachan{{w}}, "change");
+            }
+        }
+        bws{{w}}.addEventListener("change", change{{w}});
+        chan{{w}}.addEventListener("change", change{{w}});
+        stachan{{w}}.addEventListener("change", change{{w}});
+        if (lanbws{{w}}) {
+            lanbws{{w}}.addEventListener("change", change{{w}});
+        }
+        radio{{w}}.addEventListener("change", change{{w}});
+        stachans{{w}}.addEventListener("click", click{{w}});
+    {% }
+    if (length(wlan) > 1) { %}
+        htmx.on(radio0, "htmx:beforeRequest", function() {
+            // Prevent duplicate WAN radio modes only
+            if (radio0.value == "3" && radio1.value == "3") {
+                radio1.value = 0;
+                htmx.closest(radio1, '.hideable').dataset.hideable = 0;
+            }
+        });
+        htmx.on(radio1, "htmx:beforeRequest", function() {
+            if (radio0.value == "3" && radio1.value == "3") {
+                radio0.value = 0;
+                htmx.closest(radio0, '.hideable').dataset.hideable = 0;
+            }
+        });
+    {% } %}
+    })();
+    </script>
+    {{_R("password-ctrl")}}
+</div>

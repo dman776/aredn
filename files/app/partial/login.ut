@@ -1,0 +1,121 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{% if (!auth.isAdmin) { %}
+<dialog id="login">
+    <div>Password <input type="password"><button>Dismiss</button></div>
+    <div class="error"><div></div></div>
+</dialog>
+<div id="login-icon" class="popup-menu">
+    <label title="Login as admin">
+        <input type="checkbox">
+        <div class="icon login"></div>
+        <div class="menu">
+            <div>Login</div>
+        </div>
+    </label>
+</div>
+<script>
+    const loginDialog = document.getElementById('login');
+    const loginInput = loginDialog.querySelector("input");
+    const loginButton = loginDialog.querySelector("button");
+    const loginError = loginDialog.querySelector(".error > div");
+    document.querySelector("#login-icon .menu > div").addEventListener("click", function()
+    {
+        loginInput.value = "";
+        loginButton.innerText = "Dismiss";
+        loginError.innerText = "";
+        loginDialog.showModal();
+    });
+    function doAuth() {
+        if (loginInput.value === "") {
+            loginDialog.close();
+        }
+        else {
+            fetch(`${location.origin}/a/authenticate?version=1&password=${encodeURIComponent(document.querySelector("#login input").value)}`).then(function(response) {
+                if (response.status === 200) {
+                    response.json().then(function(json) {
+                        loginInput.value = "";
+                        loginButton.innerText = "Dismiss";
+                        if (json.authenticated) {
+                            loginDialog.close();
+                            location.replace(location.origin);
+                        }
+                        else {
+                            loginError.innerText = "Incorrect password";
+                        }
+                    });
+                }
+                else {
+                    loginInput.value = "";
+                    loginButton.innerText = "Dismiss";
+                    loginError.innerText = "Login failure";
+                }
+            });
+        }
+    }
+    loginDialog.querySelector('button').addEventListener("click", doAuth);
+    loginDialog.querySelector('input').addEventListener("change", doAuth);
+    loginDialog.querySelector('input').addEventListener("input", function()
+    {
+        loginError.innerText = "";
+        loginButton.innerText = loginInput.value ? "OK" : "Dismiss";
+    });
+</script>
+{% } else { %}
+<div id="logout-icon" class="popup-menu">
+    <label>
+        <input type="checkbox">
+        <div class="icon login authenticated"></div>
+        <div class="menu">
+            <div>Logout</div>
+            <div>Reboot</div>
+            <div><a href="http://docs.arednmesh.org/" target="_blank">Help</a></div>
+            <div><a href="http://arednmesh.org/" target="_blank">Website</a></div>
+        </div>
+    </label>
+</div>
+<script>
+    document.querySelector("#logout-icon .menu > div:first-child").addEventListener("click", function()
+    {
+        fetch(`${location.origin}/a/authenticate?version=1&logout=1`).then(function(response) {
+            location.reload();
+        });
+    });
+    document.querySelector("#logout-icon .menu > div:nth-child(2)").addEventListener("click", function()
+    {
+        htmx.ajax("PUT", `${location.origin}/a/status/e/reboot`);
+    });
+</script>
+{% } %}

@@ -1,0 +1,73 @@
+#!/bin/sh
+true <<'LICENSE'
+
+  On boot, and every 24 hours, update the clock from the first
+  available NTP server we find on the network.
+
+  Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+  Copyright (C) 2022 Tim Wilkinson KN6PLV
+  See Contributors file for additional contributors
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation version 3 of the License.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  Additional Terms:
+
+  Additional use restrictions exist on the AREDN® trademark and logo.
+    See AREDNLicense.txt for more info.
+
+  Attributions to the AREDN® Project must be retained in the source code.
+  If importing this code into a new or existing project attribution
+  to the AREDN® project must be added to the source code.
+
+  You must not misrepresent the origin of the material contained within.
+
+  Modified versions must be modified to attribute to the original source
+  and be marked in reasonable ways as differentiate it from the original
+  version.
+
+LICENSE
+
+exec 2> /dev/null
+
+# If real ntp is running, we don't need to do this
+if [ "$(pidof ntpd)" != "" ]; then
+    if [ -f /var/state/ntp-stratum ] && [ $(cat /var/state/ntp-stratum) -lt 16 ]; then
+        echo -n "ntp" > /tmp/timesync
+        exit 0
+    fi
+fi
+
+for candidate in $(uci -q get system.ntp.server)
+do
+    if $(ntpd -n -q -p ${candidate}); then
+        echo -n "ntp" > /tmp/timesync
+        logger -p notice -t update-time "Update clock from ${candidate}"
+        exit 0
+    fi
+done
+
+# NTP servers tend to be poorly advertised, so we have to use a bit of
+# heuristics to find them
+for candidate in $(grep -i ntp /var/run/arednlink/services/* | sed "s/^.*:\/\/\(.*\):.*$/\1/")
+do
+    if $(ntpd -n -q -p ${candidate}); then
+        echo -n "ntp" > /tmp/timesync
+        logger -p notice -t update-time "Update clock from ${candidate}"
+        exit 0
+    fi
+done
+
+rm -f /tmp/timesync
+
+logger -p notice -t update-time "Failed to update clock: No reachable ntpd servers."
+exit 1

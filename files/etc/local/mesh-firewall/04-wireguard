@@ -1,0 +1,13 @@
+#!/bin/sh
+
+vtunduciport=$(uci get vtun.@options[0].port 2>/dev/null)
+vtundport=${vtunduciport:-5525}
+issupernode=$(uci get aredn.@supernode[0].enable 2>/dev/null)
+if [ "$issupernode" = "1" ]; then
+    vtundport=$(($vtundport+1000))
+fi
+vtundportend=$(($vtundport+128))
+
+nft insert rule inet fw4 input_wan udp dport $vtundport-$vtundportend accept comment \"Wireguard\"
+nft insert rule inet fw4 output_wifi udp dport $vtundport-$vtundportend reject comment \"Wireguard\"
+nft insert rule inet fw4 output_dtdlink udp dport $vtundport-$vtundportend reject comment \"Wireguard\"

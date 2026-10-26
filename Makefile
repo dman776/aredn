@@ -4,6 +4,7 @@ include openwrt.mk
 # get main- and subtarget name from TARGET
 MAINTARGET=$(word 1, $(subst -, ,$(TARGET)))
 SUBTARGET=$(word 2, $(subst -, ,$(TARGET)))
+ALTTARGET=$(word 3, $(subst -, ,$(TARGET)))
 
 GIT_BRANCH=$(shell git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
 GIT_COMMIT=$(shell git rev-parse --short HEAD)
@@ -11,7 +12,7 @@ GIT_COMMIT=$(shell git rev-parse --short HEAD)
 # set dir and file names
 TOP_DIR=$(shell pwd)
 OPENWRT_DIR=$(TOP_DIR)/openwrt
-TARGET_CONFIG=$(TOP_DIR)/configs/common.config $(TOP_DIR)/configs/$(MAINTARGET)-$(SUBTARGET).config
+TARGET_CONFIG=$(TOP_DIR)/configs/common.config $(TOP_DIR)/configs/$(MAINTARGET)-$(SUBTARGET)$(patsubst %,-%,$(ALTTARGET)).config
 UMASK=umask 022
 
 # set variables based on private or CircleCI build
@@ -46,7 +47,7 @@ $(OPENWRT_DIR): .stamp-openwrt-removed
 
 # clean up openwrt working copy
 openwrt-clean: stamp-clean-openwrt-cleaned .stamp-openwrt-cleaned
-.stamp-openwrt-cleaned: | $(OPENWRT_DIR) 
+.stamp-openwrt-cleaned: | $(OPENWRT_DIR)
 	cd $(OPENWRT_DIR); \
 	  ./scripts/feeds clean && \
 	  git clean -dff && git fetch && git reset --hard HEAD && \
@@ -56,6 +57,8 @@ openwrt-clean: stamp-clean-openwrt-cleaned .stamp-openwrt-cleaned
 	rm -f .stamp-unpatched
 	ln -sf $(TOP_DIR)/patches $(OPENWRT_DIR)/
 	ln -sf $(TOP_DIR)/files   $(OPENWRT_DIR)/
+	sed -i "s/^.*freifunk.*$$//" $(OPENWRT_DIR)/feeds.conf.default
+	sed -i "s/luci.git$$/luci.git;openwrt-22.03/" $(OPENWRT_DIR)/feeds.conf.default
 	touch $@
 
 # update openwrt and checkout specified commit
@@ -75,6 +78,7 @@ feeds-update: stamp-clean-feeds-updated .stamp-feeds-updated
 .stamp-feeds-updated: $(OPENWRT_DIR)/feeds.conf
 	cd $(OPENWRT_DIR); ./scripts/feeds uninstall -a
 	cd $(OPENWRT_DIR); ./scripts/feeds update -a
+	cd $(OPENWRT_DIR); ./scripts/feeds install libpam
 	cd $(OPENWRT_DIR); ./scripts/feeds install libcap
 	cd $(OPENWRT_DIR); ./scripts/feeds install jansson
 	cd $(OPENWRT_DIR); ./scripts/feeds install libidn2
@@ -83,22 +87,35 @@ feeds-update: stamp-clean-feeds-updated .stamp-feeds-updated
 	cd $(OPENWRT_DIR); ./scripts/feeds install libidn
 	cd $(OPENWRT_DIR); ./scripts/feeds install libopenldap
 	cd $(OPENWRT_DIR); ./scripts/feeds install libgnutls
-	cd $(OPENWRT_DIR); ./scripts/feeds install libpam
-	cd $(OPENWRT_DIR); ./scripts/feeds install libnetsnmp
-	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages olsrd
-	cd $(OPENWRT_DIR); ./scripts/feeds install perl
-	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages vtun
-	cd $(OPENWRT_DIR); ./scripts/feeds install -a -p arednpackages
-	cd $(OPENWRT_DIR); ./scripts/feeds install snmpd
+	cd $(OPENWRT_DIR); ./scripts/feeds install libnetsnmp-nossl
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages dd-wrt-ath10k-firmware
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages prometheus-exporter
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages babel
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages arednlink
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages whenandwhere
+	cd $(OPENWRT_DIR); ./scripts/feeds install snmpd-nossl
+	cd $(OPENWRT_DIR); ./scripts/feeds install curl
 	cd $(OPENWRT_DIR); ./scripts/feeds install ntpclient
 	cd $(OPENWRT_DIR); ./scripts/feeds install socat
-	cd $(OPENWRT_DIR); ./scripts/feeds install xinetd
-	cd $(OPENWRT_DIR); ./scripts/feeds install luci-base
+	cd $(OPENWRT_DIR); ./scripts/feeds install luci-lib-base
 	cd $(OPENWRT_DIR); ./scripts/feeds install luci-lib-nixio
 	cd $(OPENWRT_DIR); ./scripts/feeds install luci-lib-ip
 	cd $(OPENWRT_DIR); ./scripts/feeds install luci-lib-jsonc
-	cd $(OPENWRT_DIR); ./scripts/feeds install luaposix
 	cd $(OPENWRT_DIR); ./scripts/feeds install luasocket
+	cd $(OPENWRT_DIR); ./scripts/feeds install iperf3
+	cd $(OPENWRT_DIR); ./scripts/feeds install micrond
+	cd $(OPENWRT_DIR); ./scripts/feeds install mii-tool
+	cd $(OPENWRT_DIR); ./scripts/feeds install mmc-utils
+	cd $(OPENWRT_DIR); ./scripts/feeds install mtr
+	cd $(OPENWRT_DIR); ./scripts/feeds install qemu-ga
+	cd $(OPENWRT_DIR); ./scripts/feeds install rpcapd
+	cd $(OPENWRT_DIR); ./scripts/feeds install usbutils
+	cd $(OPENWRT_DIR); ./scripts/feeds install ffmpeg
+	cd $(OPENWRT_DIR); ./scripts/feeds install gpsd
+	cd $(OPENWRT_DIR); ./scripts/feeds install inotifywait
+	cd $(OPENWRT_DIR); ./scripts/feeds install -a -p morse
+	cd $(OPENWRT_DIR); ./scripts/feeds install -p arednpackages morsemicro-bcf
+	cd $(OPENWRT_DIR); ./scripts/feeds install lighttpd
 	touch $@
 
 # prepare patch
@@ -140,24 +157,12 @@ prepare: stamp-clean-prepared .stamp-prepared
 # compile
 compile: stamp-clean-compiled .stamp-compiled
 .stamp-compiled: .stamp-prepared .stamp-feeds-updated | $(TOP_DIR)/firmware
-	$(TOP_DIR)/scripts/tests-prebuild.sh
 	$(UMASK); \
 	  $(MAKE) -C $(OPENWRT_DIR) $(MAKE_ARGS)
-	for FILE in `find $(TOP_DIR)/firmware/targets/ -path "*packages" -prune -o \( -type f -a \
-	  ! \( -name "*factory.bin" -o -name "*sysupgrade.bin" -o -name "*initramfs.elf" -o \
-	  -name sha256sums -o -name "*.buildinfo" \) \
+	for FILE in `find $(TOP_DIR)/firmware/targets/$(MAINTARGET)/$(SUBTARGET) -path "*packages" -prune -o \( -type f -a \
+	  ! \( -name "*factory.bin" -o -name "*sysupgrade.bin"  -o -name "*sysupgrade-v7.bin" -o -name "*x86*" -o -name "*initramfs*" -o -name "*sysupgrade.itb" -o -name sha256sums -o -name "*.buildinfo" -o -name "*.json" \) \
 	  -print \)`; do rm $$FILE; \
 	done;
-	for FILE in `find $(TOP_DIR)/firmware/targets/ -type f -a \
-	  \( -name "*ar71xx-generic-*" \
-	  -o -name "*ath79-generic-*" \
-	  -o -name "*ar71xx-mikrotik*squashfs*" \
-	  \) -print`; do \
-	  NEWNAME="$${FILE/generic-/}"; \
-	  NEWNAME="$${NEWNAME/squashfs-/}"; \
-	  mv "$$FILE" "$$NEWNAME"; \
-	done;
-	$(TOP_DIR)/scripts/tests-postbuild.sh
 
 $(TOP_DIR)/firmware:
 	ln -sf $(OPENWRT_DIR)/bin/ $(TOP_DIR)/firmware

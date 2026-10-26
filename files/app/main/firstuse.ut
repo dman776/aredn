@@ -1,0 +1,205 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+if (!(configuration.isConfigured() && config.authenable) && request.env.REQUEST_METHOD === "POST") {
+    if (request.args.firmwarefile) {
+        response.reboot = `/usr/local/bin/aredn_sysupgrade --firstuse ${request.args.firmwarefile}`;
+        print(_R("reboot-firstuse-ram"));
+        return;
+    }
+    if (request.args.restorefile) {
+        configuration.restore(request.args.restorefile);
+        response.reboot = "/sbin/reboot";
+        print(_R("reboot-firstuse-restore"));
+        return;
+    }
+}
+if (!(configuration.isConfigured() && config.authenable) && request.env.REQUEST_METHOD === "PUT") {
+    system(`/usr/local/bin/setpasswd ${configuration.shellEscape(request.args.passwd)} > /dev/null 2>&1`);
+    configuration.setName(request.args.name);
+    configuration.setConfigured("1");
+    response.reboot = "/sbin/reboot";
+    print(_R("reboot-firstuse"));
+    return;
+}
+%}
+<!DOCTYPE>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link href="/a/css/theme.css" rel="stylesheet">
+    <link href="/a/css/user.css" rel="stylesheet">
+    <link href="/a/css/admin.css" rel="stylesheet">
+    <script src="/a/js/htmx.min.js"></script>
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+</head>
+<body>
+    <div id="all">
+        <div class="firstuse">
+            <div>
+                <div id="icon-logo""></div>
+                <div></div>
+                <div>AREDN<span>TM</span></div>
+                <div>Amateur Radio Emergency Data Network</div>
+            </div>
+            <div>
+                <div>Welcome</div>
+                <div>
+                    <div>Congratulations on installing AREDN&reg;</div>
+                    <div>There's a few pieces of basic information we need to start setting up your node.</div>
+                </div>
+                <div>
+                    <div class="cols">
+                        <div>Node Name</div>
+                        <div><input type="text" name="name" required pattern="{{constants.patNodename}}" {{request.headers['include-advanced'] === "1" ? "disabled" : ""}}></div>
+                    </div>
+                    <div>
+                        <small>This is the unique name given to your node. It must start with your callsign which must be capitalized. For example, <b>K6AH-home</b></small>
+                    </div>
+                    <div class="cols password-toggle">
+                        <div>New Password</div>
+                        <div><input type="password" name="passwd1" required pattern="`[^%#'"]+" minlength="4" {{request.headers['include-advanced'] === "1" ? "disabled" : ""}}><button class="icon eye"></div>
+                    </div>
+                    <div class="cols password-toggle">
+                        <div>Retype Password</div>
+                        <div><input type="password" name="passwd2" required pattern="" minlength="4" {{request.headers['include-advanced'] === "1" ? "disabled" : ""}}><button class="icon eye"></div>
+                    </div>
+                    <div>
+                        <small>Enter a password, twice, to assign to your node for access to configuration information later</small>
+                    </div>
+                    <div class="ctrl-modal-advanced {{request.headers['include-advanced'] === "1" ? "active" : ""}}">
+                        <hr>
+                        <button style="background:transparent;border:0" hx-get="{{request.env.REQUEST_URI}}" hx-target="body" hx-headers='{"Include-Advanced":"{{request.headers['include-advanced'] === "1" ? "0" : "1"}}"}'>Advanced</button>
+                    </div>
+                    <div>
+                        <div>
+                            <div class="cols">
+                                <div>Update Firmware</div>
+                                <div><input type="file" name="firmware" accept=".bin,.gz,.itb"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="cols">
+                                <div>Restore Configuration</div>
+                                <div><input type="file" name="restore" accept=".backup"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cols">
+                        <div></div>
+                        {% if (request.headers['include-advanced'] === "1") { %}
+                        <div><button class="save" disabled hx-encoding="multipart/form-data">Update</button></div>
+                        {% } else { %}
+                        <div><button class="save" disabled>Save &amp; Reboot</button></div>
+                        {% } %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function(){
+        function change()
+        {
+            const name = htmx.find("input[name=name]");
+            const passwd1 = htmx.find("input[name=passwd1]");
+            const passwd2 = htmx.find("input[name=passwd2]");
+            let v = passwd1.value;
+            if (v === "hsmm") {
+                passwd1.pattern = "BAD";
+            }
+            else {
+                passwd1.pattern = `[^#'"]+`;
+            }
+            passwd2.required = v ? "required" : "";
+            ["\\", ".", "*", "+", "?", "^", "$", "(", ")", "{", "}", "[", "]", "|" ].forEach(k => v = v.replaceAll(k, f => `\\${k}`));
+            passwd2.pattern = v;
+            if (name.validity.valid && passwd1.validity.valid && passwd2.validity.valid) {
+                htmx.find("button.save").disabled = false;
+            }
+            else {
+                htmx.find("button.save").disabled = true;
+            }
+        }
+        htmx.on("input[name=name]", "keyup", change);
+        htmx.on("input[name=passwd1]", "keyup", change);
+        htmx.on("input[name=passwd2]", "keyup", change);
+        htmx.on("button.save", "click", e => {
+            htmx.find("button.save").disabled = true;
+            if (htmx.find("button.save").innerHTML === "Update") {
+                htmx.ajax("POST", "{{request.env.REQUEST_URI}}", {
+                    source: e.currentTarget,
+                    values: {
+                        firmwarefile: htmx.find("input[name=firmware]").files[0]
+                    },
+                    swap: "none"
+                });
+            }
+            else if (htmx.find("button.save").innerHTML === "Restore") {
+                htmx.ajax("POST", "{{request.env.REQUEST_URI}}", {
+                    source: e.currentTarget,
+                    values: {
+                        restorefile: htmx.find("input[name=restore]").files[0]
+                    },
+                    swap: "none"
+                });
+            }
+            else {
+                htmx.ajax("PUT", "{{request.env.REQUEST_URI}}", {
+                    values: {
+                        name: htmx.find("input[name=name]").value,
+                        passwd: htmx.find("input[name=passwd1]").value
+                    },
+                    swap: "none"
+                });
+            }
+        });
+        htmx.on("input[name=firmware]", "change", _ => {
+            if (htmx.find("input[name=firmware]").files[0]) {
+                htmx.find("button.save").disabled = false;
+                htmx.find("button.save").innerHTML = "Update";
+            }
+        });
+        htmx.on("input[name=restore]", "change", _ => {
+            if (htmx.find("input[name=restore]").files[0]) {
+                htmx.find("button.save").disabled = false;
+                htmx.find("button.save").innerHTML = "Restore";
+            }
+        });
+    })();
+    </script>
+    {{_R("password-ctrl")}}
+</body>
+</html>

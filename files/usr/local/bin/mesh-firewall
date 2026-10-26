@@ -1,6 +1,6 @@
 #!/bin/sh
 <<'LICENSE'
-  Part of AREDN -- Used for creating Amateur Radio Emergency Data Networks
+  Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
   Copyright (C) 2015 Conrad Lara
    See Contributors file for additional contributors
 
@@ -18,12 +18,12 @@
 
   Additional Terms:
 
-  Additional use restrictions exist on the AREDN(TM) trademark and logo.
+  Additional use restrictions exist on the AREDN® trademark and logo.
     See AREDNLicense.txt for more info.
 
-  Attributions to the AREDN Project must be retained in the source code.
+  Attributions to the AREDN® Project must be retained in the source code.
   If importing this code into a new or existing project attribution
-  to the AREDN project must be added to the source code.
+  to the AREDN® project must be added to the source code.
 
   You must not misrepresent the origin of the material contained within.
 
@@ -32,31 +32,6 @@
   version.
 
 LICENSE
-
-
-### Lets export some variables to help other scripts we call later.
-
-#Are we in NAT mode
-if [ -f "/etc/config/dmz-mode" ]
-then
-  export MESHFW_NATLAN=0
-else
-  export MESHFW_NATLAN=1
-fi
-
-#Is this node a meshgw
-export MESHFW_MESHGW
-MESHFW_MESHGW=$(grep -i olsrd_gw /etc/config.mesh/_setup|cut -d ' ' -f 3)
-
-# Are tunnels 'enabled'
-if [ -x "/usr/sbin/vtund" ]
-then
-  export MESHFW_TUNNELS_ENABLED=1
-else
-  export MESHFW_TUNNELS_ENABLED=0
-fi
-
-# Lets execute each include file
 
 for file in /etc/local/mesh-firewall/*
 do

@@ -4,49 +4,6 @@
 START=99
 boot() {
 
-  if [ ! -f /etc/aredn_include/ethmacfixup ]
-  then
-    mkdir -p /etc/aredn_include
-    touch /etc/aredn_include/ethmacfixup
-    local lanintf="$(uci -q get 'network.lan.ifname')"
-    lanintf=${lanintf%% *}
-    local wifiintf="$(uci -q get 'network.wifi.ifname')"
-    local lanmac=`ifconfig $lanintf | grep -o -E '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'`
-    local wifimac=`ifconfig $wifiintf | grep -o -E '([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}'`
-
-    local intlanmac=${lanmac//:/}
-    local intwanmac=${wifimac//:/}
-    local macdelta=$((0x$intwanmac - 0x$intlanmac))
-
-    # Deal with lan and wifi having same mac address (common on TP-Link)
-    # Deal with lan mac + ~10 = wifi mac address (common on Microtik and
-    # breaks OLSR if using derived IP addresses)
-    if [ $macdelta -le 10 ]
-    then
-      local wifimacdigit=`printf "%X" $(((0x${wifimac:9:2} + 1) % 256))`
-      local newmac=${wifimac:0:9}${wifimacdigit}${wifimac:11}
-      lanintf=${lanintf%%.*}
-      echo "" > /etc/aredn_include/ethmacfixup
-      echo "config interface 'setethmac'" >> /etc/aredn_include/ethmacfixup
-      echo -e "\toption\tifname\t'$lanintf'" >> /etc/aredn_include/ethmacfixup
-      echo -e "\toption\tproto\t'none'" >> /etc/aredn_include/ethmacfixup
-      echo -e "\toption\tmacaddr\t$newmac" >> /etc/aredn_include/ethmacfixup
-      uci set "network.setethmac=interface"
-      uci set "network.setethmac.ifname=$lanintf"
-      uci set "network.setethmac.proto=none"
-      uci set "network.setethmac.macaddr=$newmac"
-      uci commit
-      /etc/init.d/network reload
-      /etc/init.d/network restart
-    fi
-  fi
-
-
-  [ -x /usr/local/bin/bbhn-postupgrade ] && /usr/local/bin/bbhn-postupgrade
-
-  # setup nvram variables
-  [ -x /usr/local/bin/nvram-setup ] &&  /usr/local/bin/nvram-setup
-
   # run mode specific setup
   [ -x /etc/config/local ] && /etc/config/local
   [ -x /etc/local/services ] && /etc/local/services
@@ -56,7 +13,6 @@ boot() {
   if [ -z "$poevalue" ]; then
     local dpval=$(jsonfilter -e '@.gpioswitch.poe_passthrough.default' < /etc/board.json)
     if [ ! -z "$dpval" ]; then
-      uci -q add aredn poe
       uci -q set aredn.@poe[0].passthrough="$dpval"
       uci -q commit aredn
       poevalue=$dpval
@@ -68,7 +24,6 @@ boot() {
   local usbvalue=$(uci -q get aredn.@usb[0].passthrough)
   if [ -z "$usbvalue" ]; then
     local duval=$(jsonfilter -e '@.gpioswitch.usb_power_switch.default' < /etc/board.json)
-    uci -q add aredn usb
     uci -q set aredn.@usb[0].passthrough="$duval"
     uci -q commit aredn
     usbvalue=$duval
@@ -76,29 +31,12 @@ boot() {
   /usr/local/bin/usb_passthrough "${usbvalue}"
 
   # package repositories
-  local repos="core base arednpackages packages luci routing telephony"
-  set -- $repos
-  while [ -n "$1" ]; do
-    local ucirepo=$(uci -q get aredn.@downloads[0].pkgs_$1)
-    local distrepo=$(grep aredn_$1 /etc/opkg/distfeeds.conf | cut -d' ' -f3)
-    # get the URLs from distfeeds.conf and set the initial UCI values if not present
-    if [ -z $ucirepo ]; then
-      uci set aredn.@downloads[0].pkgs_$1=$distrepo
-      uci commit aredn
-      uci -c /etc/config.mesh set aredn.@downloads[0].pkgs_$1=$distrepo
-      uci -c /etc/config.mesh commit aredn
-    # check values in distfeeds.conf against UCI settings
-    # and change distfeeds.conf if needed (upgrades?)
-    elif [ $ucirepo != $distrepo ]; then
-      sed -i "s|$distrepo|$ucirepo|g" /etc/opkg/distfeeds.conf
-    fi
-    shift
-  done
-
-  # set local alerts if available
-  local alertslocalpath=$(uci -q get aredn.@alerts[0].localpath)
-  if [ -z "$alertslocalpath" ]; then
-      uci -q add aredn alerts
-      uci -q commit aredn
+  local packages_default=$(uci -q get "aredn.@downloads[0].packages_default")
+  if [ "${packages_default}" != "" ]; then
+    (cat /etc/apk/repositories.d/distfeeds.list | while read line; do
+      local prefixurl=$(echo $line | sed -n 's/\(http[s]\?:\/\/[^/]\+\).*/\1/p')
+      echo $line | sed "s|$prefixurl|$packages_default|"
+    done) > /etc/apk/repositories.d/distfeeds.list.new
+    mv -f /etc/apk/repositories.d/distfeeds.list.new /etc/apk/repositories.d/distfeeds.list
   fi
 }

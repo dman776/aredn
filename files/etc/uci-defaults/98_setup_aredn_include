@@ -1,0 +1,158 @@
+#!/bin/sh
+# extract auto-generated first boot switch config settings
+# and store them for future use. Support advanced user overrides.
+ainclude="/etc/aredn_include"
+mkdir -p $ainclude
+
+if [ -f $ainclude/swconfig.user ]
+then
+	cp $ainclude/swconfig.user $ainclude/swconfig
+fi
+if [ ! -f $ainclude/swconfig ]
+then
+  touch $ainclude/swconfig
+  i=0
+  while true; do
+    uci -q get network.\@switch\[$i\] > /dev/null
+    status=$?
+    if [ $status == 1 ]
+    then
+      break
+    fi
+    echo "config switch" >> $ainclude/swconfig
+    echo "    option name '`uci -q get network.\@switch\[$i\].name`'" >> $ainclude/swconfig
+    echo "    option reset '`uci -q get network.\@switch\[$i\].reset`'" >> $ainclude/swconfig
+    echo "    option enable_vlan '`uci -q get network.\@switch\[$i\].enable_vlan`'" >> $ainclude/swconfig
+    echo "" >> $ainclude/swconfig
+    let i++
+  done
+
+  i=0
+  while true; do
+    uci -q get network.\@switch_vlan\[$i\] > /dev/null
+    status=$?
+    if [ $status == 1 ]
+    then
+      break
+    fi
+    echo "config switch_vlan" >> $ainclude/swconfig
+    echo "	option device '`uci -q get network.\@switch_vlan\[$i\].device`'" >> $ainclude/swconfig
+    echo "	option vlan '`uci -q get network.\@switch_vlan\[$i\].vlan`'" >> $ainclude/swconfig
+    echo "	option ports '`uci -q get network.\@switch_vlan\[$i\].ports`'" >> $ainclude/swconfig
+    echo "" >> $ainclude/swconfig
+    let i++
+  done
+
+  i=0
+  while true; do
+    uci -q get network.\@switch_port\[$i\] > /dev/null
+    status=$?
+    if [ $status == 1 ]
+    then
+      break
+    fi
+    echo "config switch_port" >> $ainclude/swconfig
+    echo "	option device '`uci -q get network.\@switch_port\[$i\].device`'" >> $ainclude/swconfig
+    echo "	option port '`uci -q get network.\@switch_port\[$i\].port`'" >> $ainclude/swconfig
+    echo "	option pvid '`uci -q get network.\@switch_port\[$i\].pvid`'" >> $ainclude/swconfig
+    echo "" >> $ainclude/swconfig
+    let i++
+  done
+
+fi
+
+# Network setup done by node-setup
+
+# Save system NET  LED settings
+if [ ! -f $ainclude/system_netled ]
+then
+  touch $ainclude/system_netled
+
+  CFG=/etc/board.json
+
+  . /usr/share/libubox/jshn.sh
+
+  [ -s $CFG ] || /bin/board_detect || exit 1
+
+  generate_led() {
+	local key="$1"
+	local cfg="led_$key"
+
+	json_select led
+	json_select "$key"
+	json_get_vars name sysfs type trigger default
+
+
+	case "$type" in
+		gpio)
+			local gpio inverted
+			json_get_vars gpio inverted
+		;;
+
+		netdev)
+			local device mode
+			json_get_vars device mode
+    			echo "config led 'led_$1'" >> $ainclude/system_netled
+    			echo "    option name '$name'" >> $ainclude/system_netled
+    			echo "    option sysfs '$sysfs'" >> $ainclude/system_netled
+    			echo "    option trigger 'netdev'" >> $ainclude/system_netled
+    			echo "    option mode '$mode'" >> $ainclude/system_netled
+    			echo "    option dev '$device'" >> $ainclude/system_netled
+    			echo "" >> $ainclude/system_netled
+		;;
+
+		usb)
+			local device
+			json_get_vars device
+		;;
+
+		usbport)
+			local ports port
+			json_get_values ports ports
+		;;
+
+		rssi)
+			local iface minq maxq offset factor
+			json_get_vars iface minq maxq offset factor
+		;;
+
+		switch)
+			local port_mask speed_mask
+			json_get_vars port_mask speed_mask
+    			echo "config led 'led_$1'" >> $ainclude/system_netled
+    			echo "    option name '$name'" >> $ainclude/system_netled
+    			echo "    option sysfs '$sysfs'" >> $ainclude/system_netled
+    			echo "    option trigger '$trigger'" >> $ainclude/system_netled
+    			echo "    option port_mask '$port_mask'" >> $ainclude/system_netled
+    			echo "" >> $ainclude/system_netled
+		;;
+
+		portstate)
+			local port_state
+			json_get_vars port_state
+		;;
+
+		timer|oneshot)
+			local delayon delayoff
+			json_get_vars delayon delayoff
+		;;
+	esac
+
+	json_select ..
+	json_select ..
+  }
+
+
+  json_init
+  json_load "$(cat ${CFG})"
+
+
+  if [ ! -s $ainclude/system_netled ]; then
+	touch $ainclude/system_netled
+
+	json_get_keys keys led
+	for key in $keys; do generate_led $key; done
+  fi
+fi
+
+exit 0

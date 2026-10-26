@@ -1,0 +1,478 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+if (request.env.REQUEST_METHOD === "PUT") {
+    configuration.prepareChanges();
+    if (request.args.cloudmesh) {
+        uciMesh.set("aredn", "@supernode[0]", "support", request.args.cloudmesh === "on" ? "1" : "0");
+    }
+    if (request.args.iperf) {
+        uciMesh.set("aredn", "@iperf[0]", "enable", request.args.iperf === "on" ? "1" : "0");
+    }
+    if (request.args.beacon) {
+        uciMesh.set("aredn", "@beacon[0]", "enable", request.args.beacon === "on" ? "1" : "0");
+    }
+    if (request.args.ssh_access) {
+        uciMesh.set("aredn", "@wan[0]", "ssh_access", request.args.ssh_access === "on" ? "1" : "0");
+    }
+    if (request.args.ssh_password) {
+        uciMesh.set("dropbear", "@dropbear[0]", "PasswordAuth", request.args.ssh_password);
+    }
+    if (request.args.telnet_access) {
+        uciMesh.set("aredn", "@wan[0]", "telnet_access", request.args.telnet_access === "on" ? "1" : "0");
+    }
+    if (request.args.web_access) {
+        uciMesh.set("aredn", "@wan[0]", "web_access", request.args.web_access === "on" ? "1" : "0");
+    }
+    if ("remotelog" in request.args) {
+        uciMesh.set("aredn", "@remotelog[0]", "url", request.args.remotelog);
+    }
+    if (request.args.watchdog) {
+        uciMesh.set("aredn", "@watchdog[0]", "enable", request.args.watchdog === "on" ? "1" : "0");
+    }
+    if ("watchdog_ping_address" in request.args) {
+        uciMesh.set("aredn", "@watchdog[0]", "ping_addresses", request.args.watchdog_ping_address);
+    }
+    if ("watchdog_daily" in request.args) {
+        uciMesh.set("aredn", "@watchdog[0]", "daily", request.args.watchdog_daily);
+    }
+    if (request.args.wireless_watchdog) {
+        uciMesh.set("aredn", "@wireless_watchdog[0]", "enable", request.args.wireless_watchdog === "on" ? "1" : "0");
+    }
+    if ("wireless_watchdog_daily" in request.args) {
+        uciMesh.set("aredn", "@wireless_watchdog[0]", "daily", request.args.wireless_watchdog_daily);
+    }
+    if ("power_poe" in request.args) {
+        uciMesh.set("aredn", "@poe[0]", "passthrough", request.args.power_poe === "on" ? "1" : "0");
+    }
+    if ("power_usb" in request.args) {
+        uciMesh.set("aredn", "@usb[0]", "passthrough", request.args.power_usb === "on" ? "1" : "0");
+    }
+    if ("remoterf" in request.args) {
+        uciMesh.set("aredn", "@remoterf[0]", "enable", request.args.remoterf === "on" ? "1" : "0");
+    }
+    if ("wan_monitor1" in request.args) {
+        if (request.args.wan_monitor1 === "" || match(request.args.wan_monitor1, /^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$/)) {
+            uciMesh.set("aredn", "@wan[0]", "monitor1", request.args.wan_monitor1);
+        }
+    }
+    if ("wan_monitor2" in request.args) {
+        if (request.args.wan_monitor2 === "" || match(request.args.wan_monitor2, /^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$/)) {
+            uciMesh.set("aredn", "@wan[0]", "monitor2", request.args.wan_monitor2);
+        }
+    }
+    if ("message_pollrate" in request.args) {
+        uciMesh.set("aredn", "@alerts[0]", "pollrate", request.args.message_pollrate);
+    }
+    if ("message_localpath" in request.args) {
+        uciMesh.set("aredn", "@alerts[0]", "localpath", request.args.message_localpath);
+    }
+    if ("message_groups" in request.args) {
+        uciMesh.set("aredn", "@alerts[0]", "groups", request.args.message_groups);
+    }
+    if ("restart_service" in request.args) {
+        system(`/usr/local/bin/restart-services --force --ignore-reboot ${request.args.restart_service} > /dev/null 2>&1`, 20000);
+    }
+    uciMesh.commit("aredn");
+    uciMesh.commit("dropbear");
+    print(_R("changes"));
+    return;
+}
+if (request.env.REQUEST_METHOD === "DELETE") {
+    configuration.revertModalChanges();
+    print(_R("changes"));
+    return;
+}
+%}
+<div class="dialog">
+    {{_R("dialog-header", "Internal Services")}}
+    <div>
+        <div class="cols">
+            <div>
+                <div class="o">Cloud Mesh</div>
+                <div class="m">Use any Supernodes found on the mesh.</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "cloudmesh", value: uciMesh.get("aredn", "@supernode[0]", "support") !== "0" })}}
+            </div>
+        </div>
+        {{_H("By default, your node will locate and use any available supernode it finds on your local mesh.
+            This allows you to connect to any node in the AREDN cloud. Disable this option if you don't want to connect.")}}
+        <div class="cols">
+            <div>
+                <div class="o">iPerf3 Server</div>
+                <div class="m">Enable the iperf3 server for easy connection speed testing</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "iperf", value: uciMesh.get("aredn", "@iperf[0]", "enable") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Enable the included iperf3 client and server tools. This makes it easy to perform bandwidth tests between arbitrary nodes
+            in the network. The client and server are only invoked on demand, so there is no performance impact on the node except when tests
+            are performed.")}}
+        <div class="cols">
+            <div>
+                <div class="o">Remote logging</div>
+                <div class="m">Send internal logging information to a remote server</div>
+            </div>
+            <div style="flex:0">
+                <input hx-put="{{request.env.REQUEST_URI}}" name="remotelog" type="text" size="24" placeholder="None" pattern="(tcp|udp)://((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}:\d+" hx-validate="true" value="{{uciMesh.get("aredn", "@remotelog[0]", "url") || ""}}">
+            </div>
+        </div>
+        {{_H("Local node logs are kept in a limited amount of RAM which means older information is lost, and all logs are lost on reboot.
+            This options will send the logs to a remote log server using the syslog protocol. The option should be <b>udp://ip-address:port</b> or <b>tcp://ip-address:port</b>.
+            Leave blank if no remote logging is required.")}}
+        <div class="cols">
+            <div>
+                <div class="o">WAN ssh</div>
+                <div class="m">Allow ssh access to node from the WAN interface</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "ssh_access", value: uciMesh.get("aredn", "@wan[0]", "ssh_access") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Allow access to the node via the WAN network using ssh. Disabling this option will not prevent ssh acccess to the node from the mesh.")}}
+        <div class="cols">
+            <div>
+                <div class="o">SSH password authentication</div>
+                <div class="m">Allow ssh password authentication</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "ssh_password", value: uciMesh.get("dropbear", "@dropbear[0]", "PasswordAuth") !== "off" })}}
+            </div>
+        </div>
+        {{_H("Allow password authentication in ssh connections. Disabling this option forces the use of uploaded ssh keys.")}}
+        <div class="cols">
+            <div>
+                <div class="o">WAN telnet</div>
+                <div class="m">Allow telnet access to node from the WAN interface</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "telnet_access", value: uciMesh.get("aredn", "@wan[0]", "telnet_access") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Allow access to the node via the WAN network using telnet. Disabling this option will not prevent telnet acccess to the node from the mesh.")}}
+        <div class="cols">
+            <div>
+                <div class="o">WAN web</div>
+                <div class="m">Allow web access to node from the WAN interface</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "web_access", value: uciMesh.get("aredn", "@wan[0]", "web_access") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Allow access to the node's web interface via the WAN network. Disabling this option will not prevent web acccess to the node from the mesh.")}}
+    {% if (hardware.supportsFeature("hw-watchdog")) { %}
+        <div class="hideable" data-hideable='{{uciMesh.get("aredn", "@watchdog[0]", "enable") === "1" ? "on" : "off"}}'>
+            <div class="cols">
+                <div>
+                    <div class="o">Hardware Watchdog</div>
+                    <div class="m">Allow hardware watchdog to reboot the node if it becomes unresponsive</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("hideable-switch", { name: "watchdog", value: uciMesh.get("aredn", "@watchdog[0]", "enable") === "1" })}}
+                </div>
+            </div>
+            {{_H("Enables the hardware watchdog timer. This timer will reboot the device if it becomes unresponsive or various critical AREDN components
+            stop running correctly. Because the watchdog is in the hardware, even if the kernel crashes, the device will still reboot itself.
+            ")}}
+            <div class="hideable1">
+                <div class="cols">
+                    <div>
+                        <div class="o">Watchdog IP addresses</div>
+                        <div class="m">IP address to check periodically</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="watchdog_ping_address" type="text" size="20" placeholder="None" pattern="{{constants.patIP}}( {{constants.patIP}})*" hx-validate="true" value="{{uciMesh.get("aredn", "@watchdog[0]", "ping_addresses") || ""}}">
+                    </div>
+                </div>
+                {{_H("As part of the watchdog process, the watchdog periodically makes sure it can reach a given space seperated list of IP addresses. If it can't the node will be rebooted.
+                It is important that these IP addresses are quick to reach. Don't try to reach IP addresses on the Internet.")}}
+                <div class="cols">
+                    <div>
+                        <div class="o">Daily Watchdog time</div>
+                        <div class="m">Reboot the node at a specific time every day</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="watchdog_daily" type="text" size="20" placeholder="None" pattern="(0\d|1\d|2[0-3]):(0\d|[1-5]\d)" hx-validate="true" value="{{uciMesh.get("aredn", "@watchdog[0]", "daily") || ""}}">
+                    </div>
+                </div>
+                {{_H("Set a specific time of the day (between 00:00 and 23:59) to reboot the node automatically. Hopefully this isn't necessary. but it can be a good fallback for nodes which
+                are unreliable and in places difficult to reach. A node must have its time set using either NTP or GPS for this to be honored.")}}
+            </div>
+        </div>
+    {% } %}
+    {% if (hardware.getRadioCount() > 0) { %}
+        <div class="cols">
+            <div>
+                <div class="o">ID Beacon</div>
+                <div class="m">Send an ID Beacon with your node's name and location</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "beacon", value: uciMesh.get("aredn", "@beacon[0]", "enable") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Allow a node to send an ID beacon containing the name and location. This is necessary in some regions to comply with local regulations.")}}
+        <div class="hideable" data-hideable='{{uciMesh.get("aredn", "@wireless_watchdog[0]", "enable") === "1" ? "on" : "off"}}'>
+            <div class="cols">
+                <div>
+                    <div class="o">Wireless Watchdog</div>
+                    <div class="m">Allow watchdog to restart the wifi if it becomes unresponsive</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("hideable-switch", { name: "wireless_watchdog", value: uciMesh.get("aredn", "@wireless_watchdog[0]", "enable") === "1" })}}
+                </div>
+            </div>
+            {{_H("Enable the wireless watchdog. This monitors the wifi mesh radio and tries to fix connection problems when they're detected.")}}
+            <div class="hideable1">
+                <div class="cols">
+                    <div>
+                        <div class="o">Daily Wireless Watchdog time</div>
+                        <div class="m">Restart the wifi at a specific time every day</div>
+                    </div>
+                    <div style="flex:0">
+                        <input hx-put="{{request.env.REQUEST_URI}}" name="wireless_watchdog_daily" type="text" size="20" placeholder="None" pattern="(0\d|1\d|2[0-3]):(0\d|[1-5]\d)" hx-validate="true" value="{{uciMesh.get("aredn", "@wireless_watchdog[0]", "daily") || ""}}">
+                    </div>
+                </div>
+                {{_H("Set a specific time of the day (between 00:00 and 23:59) to restart the wifi automatically.")}}
+            </div>
+        </div>
+    {% }
+       if (hardware.supportsFeature("poe")) { %}
+        <div class="cols">
+            <div>
+                <div class="o">PoE Passthrough</div>
+                <div class="m">Enable power-over-ethernet on ports which support it</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "power_poe", value: uciMesh.get("aredn", "@poe[0]", "passthrough") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Enable power over ethernet on ethernet ports where this is avaiable. Typically these ports provide passive power,
+        so the voltage out will be the same as whatever is powering the node.")}}
+    {% }
+       if (hardware.supportsFeature("usb-power")) { %}
+        <div class="cols">
+            <div>
+                <div class="o">USB Power</div>
+                <div class="m">Enable USB power on ports which support it</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "power_usb", value: uciMesh.get("aredn", "@usb[0]", "passthrough") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Enable power on the node's USB port. Which ports support this is device dependend, and some devices with USB
+        port may only have some with power available.")}}
+    {% }
+       if (hardware.supportsFeature("remoterf")) { %}
+        <div class="cols">
+            <div>
+                <div class="o">Remote Radios</div>
+                <div class="m">Enable direct routing through remote radios</div>
+            </div>
+            <div style="flex:0">
+                {{_R("switch", { name: "remoterf", value: uciMesh.get("aredn", "@remoterf[0]", "enable") !== "0" })}}
+            </div>
+        </div>
+        {{_H("Enable direct routing through remote radios. This allows this node to send traffic directly through a remote
+              radio as if it was directly connected, greatly reducing overheads incurred on slower remote radio hardware.")}}
+    {% } %}
+        <div class="cols">
+            <div>
+                <div class="o">WAN Monitor</div>
+                <div class="m">Internet WAN monitor addresses</div>
+            </div>
+            <div style="flex:0;white-space:nowrap">
+                <input hx-put="{{request.env.REQUEST_URI}}" name="wan_monitor1" type="text" size="15" pattern="{{constants.patIP}}" hx-validate="true" value="{{uciMesh.get("aredn", "@wan[0]", "monitor1")}}">
+                <input hx-put="{{request.env.REQUEST_URI}}" name="wan_monitor2" type="text" size="15" pattern="{{constants.patIP}}" hx-validate="true" value="{{uciMesh.get("aredn", "@wan[0]", "monitor2")}}">
+            </div>
+        </div>
+        {{_H("Addresses which should be reachable from the WAN interface for it to be considered usable.")}}
+        <div class="cols">
+            <div>
+                <div class="o">Message Updates</div>
+                <div class="m">Update messages every so many hours</div>
+            </div>
+            <div style="flex:0">
+                <input hx-put="{{request.env.REQUEST_URI}}" type="text" name="message_pollrate" pattern="(24|(([1-9]|1[0-9]|2[0-3])(\.[0-9]{1,2})?)|0\.(0[1-9]|[1-9]|(0[1-9]|[1-9][0-9])))" hx-validate="true" placeholder="1" value="{{uciMesh.get("aredn", "@alerts[0]", "pollrate")}}">
+            </div>
+        </div>
+        {{_H("Change the frequency we fetch messsage for this node. By default this happens every hour, but you can decrese the frequency up to
+        every 24 hours.")}}
+        <div class="cols">
+            <div>
+                <div class="o">Local Message URL</div>
+                <div class="m">Configure the local message sources</div>
+            </div>
+            <div style="flex:0">
+                <input hx-put="{{request.env.REQUEST_URI}}" type="text" name="message_localpath" pattern="{{constants.patUrl}}" hx-validate="true" value="{{uciMesh.get("aredn", "@alerts[0]", "localpath")}}">
+            </div>
+        </div>
+        {{_H("Add a local message server URL. By default messages are fetched from the global AREDN server, but you can also specify a
+        local server.")}}
+        <div class="cols">
+            <div>
+                <div class="o">Message Groups</div>
+                <div class="m">List of message group names</div>
+            </div>
+            <div style="flex:0">
+                <input hx-put="{{request.env.REQUEST_URI}}" type="text" name="message_groups" pattern="[a-zA-Z]+(,[a-zA-Z]+)*" hx-validate="true" value="{{uciMesh.get("aredn", "@alerts[0]", "groups")}}">
+            </div>
+        </div>
+        {{_H("A comma seperated list of group names to check for messages.")}}
+        {{_R("dialog-advanced")}}
+        <div>
+            {{_H("Allows parts of the node's firmware to be restarted without having to reboot the entire node.
+            Note that restarting some services can disconnection the node from the network and it may take some
+            time to recover.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart arednlink</div>
+                    <div class="m">Restart the distributed naming daemon</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "arednlink-hard" })}}
+                </div>
+            </div>
+            {{_H("Restart arednlink. Arednlink manages the distributed database of node and service names across the mesh. Restarting might
+                  help if a name is not resolving as expected.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart babel</div>
+                    <div class="m">Restart the babel routing daemon</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "babel" })}}
+                </div>
+            </div>
+            {{_H("Forces babel to forget all the routes this node knows and relearn them from the network.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Hard restart babel</div>
+                    <div class="m">Restart the babel routing daemon without saving any state</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "babel-hard" })}}
+                </div>
+            </div>
+            {{_H("Forces babel to be forgotten by the network. Babel must relearn all the routes to other nodes in the network
+                  and the network must relearn all the routes to this node. This process can take 30 minutes or longer.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart DNS and DHCP</div>
+                    <div class="m">Restart the dnsmasq daemon</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "dnsmasq" })}}
+                </div>
+            </div>
+            <div class="cols">
+                <div>
+                    <div class="o">Restart firewall</div>
+                    <div class="m">Restart the firewall</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "firewall" })}}
+                </div>
+            </div>
+            <div class="cols">
+                <div>
+                    <div class="o">Restart logs</div>
+                    <div class="m">Restart the log daemon</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "log" })}}
+                </div>
+            </div>
+            <div class="cols">
+                <div>
+                    <div class="o">Restart network</div>
+                    <div class="m">Restart the network stack</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "network-hard" })}}
+                </div>
+            </div>
+            {{_H("Shutdown and restart the node's entire network, inluding wifi, tunnels and ethernet. A node can take some time to recover.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart LQM</div>
+                    <div class="m">Restart the link quality monitor</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "lqm" })}}
+                </div>
+            </div>
+            {{_H("Shutdown and restart the Link Quality Monitor service. This service gathers data on your connections to other nodes.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart system manager</div>
+                    <div class="m">Restart the system manager daemon</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "manager" })}}
+                </div>
+            </div>
+            {{_H("Restarting the system manager restarts a number of small internal services which monitor the health of your node.")}}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart HTTP server</div>
+                    <div class="m">Restart the web server</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "uhttpd" })}}
+                </div>
+            </div>
+            {% if (hardware.getRadioCount() > 0) { %}
+            <div class="cols">
+                <div>
+                    <div class="o">Restart radios</div>
+                    <div class="m">Restart the wifi radios</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("restart", { name: "wireless" })}}
+                </div>
+            </div>
+            {{_H("Shutdown and restart all the node's radios, including both the mesh radios and any used for local access.")}}
+            {% } %}
+        </div>
+    </div>
+    {{_R("dialog-footer")}}
+    <script>
+    (function(){
+    {{_R("open")}}
+    })();
+    </script>
+</div>

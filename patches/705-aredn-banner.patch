@@ -1,15 +1,13 @@
-Index: openwrt/package/base-files/files/etc/banner
-===================================================================
---- openwrt.orig/package/base-files/files/etc/banner
-+++ openwrt/package/base-files/files/etc/banner
-@@ -1,8 +1,16 @@
+--- a/package/base-files/files/etc/banner
++++ b/package/base-files/files/etc/banner
+@@ -1,8 +1,14 @@
 -  _______                     ________        __
 - |       |.-----.-----.-----.|  |  |  |.----.|  |_
 - |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
 - |_______||   __|_____|__|__||________||__|  |____|
 -          |__| W I R E L E S S   F R E E D O M
 - -----------------------------------------------------
-- %D %V, %C
+- %D %V, %C Dave's Guitar
 - -----------------------------------------------------
 +              _____  ______ _____  _   _ 
 +        /\   |  __ \|  ____|  __ \| \ | |TM
@@ -19,11 +17,33 @@ Index: openwrt/package/base-files/files/etc/banner
 +    /_/    \_\_|  \_\______|_____/|_| \_| 
 +    AMATEUR  RADIO EMERGENCY DATA NETWORK
 +-----------------------------------------------
-+ * 1 Battery          Connect all devices
-+ * 2 POE injectors    Upgrade firmware to AREDN
-+ * 3 cat5 cables      Setup with your callsign
-+ * 1 UBNT NanoStation Point the Antenna
-+ * 1 ipCam            Welcome to the Mesh!
++ 1) Research AREDN and choose a supported device
++ 2) Download and install AREDN firmware
++ 3) Deploy and enjoy the mesh
 +-----------------------------------------------
 +  %V, %C
 + ----------------------------------------------
+--- a/package/base-files/files/etc/profile.d/apk-cheatsheet.sh
++++ /dev/null
+@@ -1,21 +0,0 @@
+-if [ -x /usr/bin/apk ] ; then
+-cat << EOF
+-
+- OpenWrt recently switched to the "apk" package manager!
+-
+- OPKG Command           APK Equivalent      Description
+- ------------------------------------------------------------------
+- opkg install <pkg>     apk add <pkg>       Install a package
+- opkg remove <pkg>      apk del <pkg>       Remove a package
+- opkg upgrade           apk upgrade         Upgrade all packages
+- opkg files <pkg>       apk info -L <pkg>   List package contents
+- opkg list-installed    apk info            List installed packages
+- opkg update            apk update          Update package lists
+- opkg search <pkg>      apk search <pkg>    Search for packages
+- ------------------------------------------------------------------
+-
+-For more information visit:
+-https://openwrt.org/docs/guide-user/additional-software/opkg-to-apk-cheatsheet
+-
+-EOF
+-fi

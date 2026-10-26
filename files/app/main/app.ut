@@ -1,0 +1,214 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{% if (!request.headers["hx-boosted"]) { %}
+<!DOCTYPE html>
+<html lang="en" translate="no">
+<head>
+    <meta charset="utf-8">
+    {% if (!config.resourcehash || auth.isLAN) { %}
+    <link href="/a/css/theme.css" rel="stylesheet">
+    <link href="/a/css/user.css" rel="stylesheet">
+    {% if (request.mobile) { %}
+    <link href="/a/css/mobile.css" rel="stylesheet">
+    {% } %}
+    {% if (auth.isAdmin) { %}
+    <link href="/a/css/admin.css" rel="stylesheet">
+    <script src="/a/js/htmx.min.js"></script>
+    {% } %}
+    {% } else {
+        versions.themecss = fs.readlink(`${config.application}/resource/css/theme.version`);
+    %}
+    <link href="http://localnode.local.mesh/a/css/theme.{{versions.themecss}}.css" rel="stylesheet" onerror="s=document.createElement('link');s.rel='stylesheet';s.href='/a/css/theme.{{versions.themecss}}.css';document.head.appendChild(s)">
+    <link href="http://localnode.local.mesh/a/css/user.{{versions.usercss}}.css" rel="stylesheet" onerror="s=document.createElement('link');s.rel='stylesheet';s.href='/a/css/user.{{versions.usercss}}.css';document.head.appendChild(s)">
+    {% if (request.mobile) { %}
+    <link href="http://localnode.local.mesh/a/css/mobile.{{versions.mobilecss}}.css" rel="stylesheet" onerror="s=document.createElement('link');s.rel='stylesheet';s.href='/a/css/mobile.{{versions.mobilecss}}.css';document.head.appendChild(s)">
+    {% } %}
+    {% if (auth.isAdmin) { %}
+    <link href="http://localnode.local.mesh/a/css/admin.{{versions.admincss}}.css" rel="stylesheet" onerror="s=document.createElement('link');s.rel='stylesheet';s.href='/a/css/admin.{{versions.admincss}}.css';document.head.appendChild(s)">
+    <script src="http://localnode.local.mesh/a/js/htmx.min.{{versions.htmx}}.js" onerror="s=document.createElement('script');s.type='text/javascript';s.onload=()=>htmx.process(document.body);s.src='/a/js/htmx.min.{{versions.htmx}}.js';document.head.appendChild(s)"></script>
+    {% } %}
+    {% } %}
+    <link rel="icon" type="image/svg+xml" href="http://localnode.local.mesh/a/img/favicon.svg">
+    <link rel="manifest" href="/a/manifest.json">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="theme-color" content = "#e8e8e8">
+    <meta name="htmx-config" content='{"selfRequestsOnly":false}'>
+    <title>{{configuration.getName()}} {{auth.isAdmin && request.page === "status" ? "admin" : request.page === "mesh-data" ? "mesh" : request.page}}</title>
+</head>
+<body class="{{auth.isAdmin ? "authenticated" : ""}} {{request.mobile ? "mobile" : ""}}" hx-indicator="body">
+    <dialog id="ctrl-modal" onclose="event.target.innerHTML = ''">{{request.dialog ? _R(request.dialog) : ""}}</dialog>
+    {% if (!request.mobile) { %}
+    <div id="all">
+        <div id="nav">
+            {{_R("nav")}}
+        </div>
+        <div id="panel">
+            <div id="select">
+                {{_R("selection")}}
+            </div>
+            <div id="main">
+                <div id="main-container">
+                    {{_R(request.page)}}
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function(){
+            function closePopups(e) {
+                const a = document.querySelectorAll(".popup-menu input[type=checkbox]:checked");
+                for (let i = 0; i < a.length; i++) {
+                    if (a[i] !== e.target) {
+                        a[i].checked = false;
+                    }
+                }
+            }
+            document.body.addEventListener("click", closePopups);
+        })();
+    </script>
+    {% } else { %}
+    <div id="m-all">
+        <div id="m-title">
+            <a href="http://localnode.local.mesh"><div id="icon-logo"></div></a><div></div>
+            {{_R("changes")}}
+            <div class="nav-node-name">{{configuration.getName()}}</div>
+        </div>
+        <div id="m-main">
+            <div id="main-container">
+                {{_R(request.page)}}
+            </div>
+        </div>
+        <div id="m-nav">
+            <div>
+                <a href="status">
+                    <div class="icon status {{request.page === "status"}}"></div>
+                </a>
+            </div>
+            <div>
+                <a href="mesh">
+                    <div class="icon mesh {{request.page === "mesh"}}"></div>
+                </a>
+            </div>
+            <div>
+                <div style="margin: 0 calc(50% - 20px);">
+                {{_R("tools")}}
+                </div>
+            </div>
+            <div>
+            {{_R("login")}}
+            </div>
+        </div>
+    </div>
+     <script>
+        (function(){
+            document.getElementById("m-all").addEventListener("click", _ => document.body.focus());
+            document.getElementById("ctrl-modal").addEventListener("click", _ => document.body.focus());
+            function closePopups(e) {
+                const a = document.querySelectorAll(".popup-menu input[type=checkbox]:checked");
+                for (let i = 0; i < a.length; i++) {
+                    if (a[i] !== e.target) {
+                        a[i].checked = false;
+                    }
+                }
+            }
+            document.body.addEventListener("click", closePopups);
+            document.addEventListener("DOMContentLoaded", _ => document.querySelector("meta[name=theme-color]").content = getComputedStyle(document.body).getPropertyValue("--nav-bg-color"));
+            let lastScrollTop = -1;
+            window.addEventListener("scroll", e => {
+                const target = document.documentElement;
+                closePopups(e);
+                const newScrollTop = target.scrollTop;
+                if (newScrollTop > 0 && newScrollTop > lastScrollTop) {
+                    document.body.classList.add("hide-bars");
+                }
+                else if (newScrollTop < target.scrollHeight - target.clientHeight && newScrollTop < lastScrollTop) {
+                    document.body.classList.remove("hide-bars");
+                }
+                lastScrollTop = newScrollTop;
+            });
+        })();
+    </script>
+    {% } %}
+    {% if (auth.isAdmin) { %}
+    <script>
+        (function(){
+            const m = document.getElementById("ctrl-modal");
+            document.body.addEventListener("click", e => {
+                if (!(m.open || document.getSelection().isCollapsed)) {
+                    e.stopPropagation();
+                }
+            }, true);
+            function dialogDone()
+            {
+                const d = document.getElementById("dialog-done");
+                if (d) {
+                    setTimeout(function() {
+                        let invalid = false;
+                        const f = m.querySelectorAll("form");
+                        for (let i = 0; i < f.length; i++) {
+                            if (!f[i].checkValidity()) {
+                                invalid = true;
+                                break;
+                            }
+                        }
+                        d.disabled = invalid;
+                    }, 10);
+                }
+            }
+            m.addEventListener("input", dialogDone);
+            m.addEventListener("click", dialogDone);
+            {% if (request.dialog) { %}
+            history.replaceState(null, "", "/a/{{request.page}}");
+            {% } %}
+        })();
+    </script>
+    {% } %}
+</body>
+</html>
+{% } else { %}
+<title>{{configuration.getName()}} {{auth.isAdmin && request.page === "status" ? "admin" : request.page}}</title>
+{{_R("nav-status")}}
+<div id="panel" hx-swap-oob="true">
+    <div id="select">
+        {{_R("selection")}}
+    </div>
+    <div id="main">
+        <div id="main-container">
+            {{_R(request.page)}}
+        </div>
+    </div>
+</div>
+{% } %}

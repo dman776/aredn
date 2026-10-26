@@ -1,0 +1,833 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+if (request.env.REQUEST_METHOD === "PUT") {
+    if ("dhcp_server" in request.args) {
+        configuration.prepareChanges();
+        configuration.setSettingAsString("lan_dhcp", request.args.dhcp_server === "on" ? 1 : 0);
+        configuration.saveSettings();
+    }
+    if ("options" in request.args) {
+        configuration.prepareChanges();
+        const options = json(request.args.options);
+        const dhcp = configuration.getDHCP();
+        const base = iptoarr(dhcp.start)[3];
+        const reservations = [];
+        for (let i = 0; i < length(options); i++) {
+            const o = options[i];
+            if (o.reserved) {
+                const ip = iptoarr(o.ip)[3];
+                if (length(o.name) > 0 && ip >= base && match(o.mac, /^([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]$/)) {
+                    push(reservations, `${o.mac} ${ip - base + 2} ${o.name}${o.noprop ? " #NOPROP" : ""}`);
+                }
+            }
+        }
+        if (!uciMesh.get("setup", "dhcpreservations")) {
+            uciMesh.set("setup", "dhcpreservations", "dhcpreservations");
+        }
+        if (length(reservations)) {
+            uciMesh.set("setup", "dhcpreservations", "reservation", reservations);
+        }
+        else {
+            uciMesh.delete("setup", "dhcpreservations", "reservation");
+        }
+        uciMesh.commit("setup");
+    }
+    if ("advtags" in request.args) {
+        configuration.prepareChanges();
+        const advtags = json(request.args.advtags);
+        const tags = [];
+        for (let i = 0; i < length(advtags); i++) {
+            const t = advtags[i];
+            push(tags, `${t.name} ${t.type} ${t.match}`);
+        }
+        if (!uciMesh.get("setup", "dhcptags")) {
+            uciMesh.set("setup", "dhcptags", "dhcptags");
+        }
+        if (length(tags)) {
+            uciMesh.set("setup", "dhcptags", "tag", tags);
+        }
+        else {
+            uciMesh.delete("setup", "dhcptags", "tag");
+        }
+        uciMesh.commit("setup");
+    }
+    if ("advoptions" in request.args) {
+        configuration.prepareChanges();
+        const advoptions = json(request.args.advoptions);
+        const options = [];
+        for (let i = 0; i < length(advoptions); i++) {
+            const o = advoptions[i];
+            push(options, `${o.name} ${o.always ? "force" : "onrequest"} ${o.type} ${o.value}`);
+        }
+        if (!uciMesh.get("setup", "dhcpoptions")) {
+            uciMesh.set("setup", "dhcpoptions", "dhcpoptions");
+        }
+        if (length(options)) {
+            uciMesh.set("setup", "dhcpoptions", "option", options);
+        }
+        else {
+            uciMesh.delete("setup", "dhcpoptions", "option");
+        }
+        uciMesh.commit("setup");
+    }
+    print(_R("changes"));
+    return;
+}
+if (request.env.REQUEST_METHOD === "DELETE") {
+    configuration.revertModalChanges();
+    print(_R("changes"));
+    return;
+}
+const dhcp = configuration.getDHCP();
+const start = iptoarr(dhcp.start);
+const end = iptoarr(dhcp.end);
+const leases = [];
+const options = [];
+const advoptions = [];
+const advtags = [];
+for (let i = start[3]; i <= end[3]; i++) {
+    push(options, { mac: "", ip: `${start[0]}.${start[1]}.${start[2]}.${i}`, name: "", noprop: false, reserved: false, leased: false });
+}
+let reservations = 0;
+let active = 0;
+const res = uciMesh.get("setup", "dhcpreservations", "reservation") || [];
+const reR = /^([^ ]+) ([^ ]+) ([^ ]+) ?(.*)/;
+for (let i = 0; i < length(res); i++) {
+    const v = match(trim(res[i]), reR);
+    if (v) {
+        const o = options[int(v[2]) - 2];
+        if (o) {
+            o.mac = v[1];
+            o.name = v[3];
+            o.noprop = v[4] == "#NOPROP";
+            o.reserved = true;
+            reservations++;
+        }
+    }
+}
+const f = fs.open("/tmp/dhcp.leases");
+if (f) {
+    const reL = /^(.+) (.+) (.+) (.+) (.+)$/;
+    for (let l = f.read("line"); length(l); l = f.read("line")) {
+        // ?, mac, ip, name, ?
+        const v = match(l, reL);
+        if (v) {
+            const ip = iptoarr(v[3]);
+            const o = options[ip[3] - start[3]];
+            if (o) {
+                o.leased = true;
+                if (o.mac === "") {
+                    o.mac = v[2];
+                }
+                if (o.name === "") {
+                    o.name = v[4];
+                }
+                active++;
+            }
+        }
+    }
+    f.close();
+}
+const tags = uciMesh.get("setup", "dhcptags", "tag") || [];
+const reT = /^([^\W_]+)\s(\w+)\s(.+)$/;
+for (let i = 0; i < length(tags); i++) {
+    const m = match(replace(tags[i], /\n+$/, ""), reT);
+    if (m) {
+        const p = replace(replace(replace(m[3], /"/g, "&quot;"), /</g, "&lt;"), />/g, "&gt;");
+        push(advtags, { name: m[1], type: m[2], match: p });
+    } 
+}
+const opts = uciMesh.get("setup", "dhcpoptions", "option") || [];
+const reO = /^(\S*)\s(force|onrequest)\s(\d+)\s(.*)$/;
+for (let i = 0; i < length(opts); i++) {
+    const m = match(replace(opts[i], /\n+$/, ""), reO);
+    if (m) {
+        const p = replace(replace(replace(m[4], /"/g, "&quot;"), /</g, "&lt;"), />/g, "&gt;");
+        push(advoptions, { name: m[1], always: m[2] === "force", type: int(m[3]), value: p });
+    }
+}
+const dhcpOptionTypes = {
+    "1": ["netmask", "mask"],
+    "2": ["time-offset", "int32"],
+    "3": ["router", "ips"],
+    "6": ["dns-server", "ips"],
+    "7": ["log-server", "ips"],
+    "9": ["lpr-server", "ips"],
+    "13": ["boot-file-size", "1...65535"],
+    "15": ["domain-name", "dns"],
+    "16": ["swap-server", "ip"],
+    "17": ["root-path", "text"],
+    "18": ["extension-path", "text"],
+    "19": ["ip-forward-enable", "flag"],
+    "20": ["non-local-source-routing", "flag"],
+    "21": ["policy-filter", "ipips"],
+    "22": ["max-datagram-reassembly", "576...65535"],
+    "23": ["default-ttl", "1...255"],
+    "26": ["mtu", "68...65535"],
+    "27": ["all-subnets-local", "flag"],
+    "31": ["router-discovery", "flag"],
+    "32": ["router-solicitation", "ip"],
+    "33": ["static-route", "ipips"],
+    "34": ["trailer-encapsulation", "flag"],
+    "35": ["arp-timeout", "uint32"],
+    "36": ["ethernet-encap", "flag"],
+    "37": ["tcp-ttl", "1...255"],
+    "38": ["tcp-keepalive", "uint32"],
+    "40": ["nis-domain", "text"],
+    "41": ["nis-server", "ips"],
+    "42": ["ntp-server", "ips"],
+    "44": ["netbios-ns", "ips"],
+    "45": ["netbios-dd", "ips"],
+    "46": ["netbios-nodetype", "[1248]", "1, 2, 4 or 8"],
+    "47": ["netbios-scope", "dns"],
+    "48": ["x-windows-fs", "ips"],
+    "49": ["x-windows-dm", "ips"],
+    "58": ["T1", "time"],
+    "59": ["T2", "time"],
+    "60": ["vendor-class", "text"],
+    "64": ["nis+-domain", "text"],
+    "65": ["nis+-server", "ips"],
+    "66": ["tftp-server", "dns"],
+    "67": ["bootfile-name", "text"],
+    "68": ["mobile-ip-home", "ips"],
+    "69": ["smtp-server", "ips"],
+    "70": ["pop3-server", "ips"],
+    "71": ["nntp-server", "ips"],
+    "74": ["irc-server", "ips"],
+    "77": ["user-class", "text"],
+    "80": ["rapid-commit", "none"],
+    "93": ["client-arch", "uint16"],
+    "94": ["client-interface-id", "1(?:,(?:\\d|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5])){2}", "1,0...255,0...255"],
+    "97": ["client-machine-id", "0,(?:[0-9A-Fa-f]{2}:?\\b){16}", "0,xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"],
+    "100": ["posix-timezone", "[A-Za-z]{3,}[+\\-]?(?:2[0-4]?|[01]?\\d)(?::[0-5]\\d){0,2}(?:[A-Za-z]{3,}(?:[+\\-]?(?:2[0-4]?|[01]?\\d)(?::[0-5]\\d){0,2})?(?:,(?:J(?:[1-9]|[1-9]\\d|[12]\\d{2}|3[0-5]\\d|36[0-5])|(?:\\d|[1-9]\\d|[12]\\d{2}|3[0-5]\\d|36[0-5])|(?:M(?:[1-9]|1[0-2])\\.[1-5]\\.[0-6]))(?:\\/(?:(?:-[1-9]|-?[1-9]\\d|-?1[0-5]\\d|-?16[0-7]|\\d))(?::[0-5]\\d){0,2})?){0,2})?", "POSIX timezone"],
+    "101": ["tzdb-timezone", "(?:(?:[A-Za-z_\\-]+\\/[A-Za-z_\\-]+(?:\\/[A-Za-z_\\-]+)?)|(?:Etc\\/[A-Za-z0-9+\\-]+(?:\\/[A-Za-z0-9]+)?|(?:CET|CST6CDT|EET|EST|EST5EDT|MET|MST|MST7MDT|PST8PDT|HST)))", "TZ Identifier"],
+    "108": ["ipv6-only", "uint32"],
+    "119": ["domain-search", "text"],
+    "120": ["sip-server", "(?:0,(?:(?:(?!-))(?:(?:xn--)?[A-Za-z0-9][A-Za-z0-9\\-]{0,61}[A-Za-z0-9]{0,1}\\.)*(?:xn--)?(?:[A-Za-z0-9\\-]{1,61}|[A-Za-z0-9\\-]{1,30}\\.[A-Za-z]{2,}),?\\b)+)|(?:1,(?:(?:(?:25[0-5]|(?:2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4},?\\b)+)", "0,DNS Names or 1,IP Addresses"],
+    "121": ["classless-static-route", "(?:(?:(?:(?:25[0-5]|(?:2[0-4]|1[0-9]|[1-9]|)[0-9])\\.?\\b){4}\\/(?:[1-9]|[12]\\d|3[0-2]),(?:(?:25[0-5]|(?:2[0-4]|1[0-9]|[1-9]|)[0-9])\\.?\\b){4}),?\\b)+", "IP Address/CIDR,IP Address[,...]"],
+    "125": ["vendor-id-encap", "(?:vi-encap:)?\\d+,(?:\\d|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5]),(?:\"(?:[^\"\\\\]|\\\\.)*\"|(?:[0-9A-Fa-f]{2}:?\\b)+|(?:(?:25[0-5]|(?:2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}|-?\\d+)", "int,0...255,data"], // https://lists.thekelleys.org.uk/pipermail/dnsmasq-discuss/2010q4/004454.html
+    "150": ["tftp-server-address", "ip"],
+    "255": ["server-ip-address", "ip"]
+};
+%}
+<div class="dialog">
+    {{_R("dialog-header", "LAN DHCP")}}
+    <div>
+        <div class="hideable" data-hideable='{{dhcp.enabled ? "on" : "off"}}'>
+            <div class="cols">
+                <div>
+                    <div class="o">DHCP Server</div>
+                    <div class="m">Provide addresses to devices on the LAN network</div>
+                </div>
+                <div style="flex:0">
+                    {{_R("hideable-switch", { name: "dhcp_server", value: dhcp.enabled })}}
+                </div>
+            </div>
+            {{_H("When enabled, provide addresses to devices attached to this node's LAN network. If disabled, the LAN network
+            is still active, but addresses will not be automatically provided. Multiple DHCP servers can be active on the same
+            LAN network (e.g. if you have multiple nodes connected together) but it is not defined which DHCP server will provide
+            what address to which device even when address reservations are configured.")}}
+            <div class="hideable1">
+                <div class="dhcp">
+                    <hr>
+                    <div>
+                        <div class="cols">
+                            <div>
+                                <div class="o">Address Reservations</div>
+                                <div class="m">Hostnames with fixed addresses</div>
+                            </div>
+                            <button class="plus" {{length(options) === reservations ? "disabled" : ""}}>+</button>
+                        </div>
+                    </div>
+                    {{_H("Creates a permenant mapping between a device MAC address and an IP address on the LAN network.
+                    The given hostname is available to everyone on the mesh unless the entry is marked as <b>do not propagate</b>.
+                    MAC addresses use colons : as their seperator.")}}
+                    <form>
+                        <div id="dhcp-reservations">
+                            <div class="reservation-label adr">
+                                <div>
+                                    <div>hostname</div>
+                                    <div>ip address</div>
+                                    <div>mac a&zwnj;ddress</div>
+                                    <div>do not propagate</div>
+                                </div>
+                                <div></div>
+                            </div>
+                        {% if (reservations > 0) {
+                            for (let i = 0; i < length(options); i++) {
+                                const o = options[i];
+                                if (o.reserved) {
+                        %}
+                                    <div class="reservation adr" data-ip="{{o.ip}}">
+                                        <div>
+                                            <input name="hostname" type="text" required placeholder="hostname" value="{{o.name}}">
+                                            <select class="dhcp-addresses">
+                                            </select>
+                                            <input name="mac" type="text" required placeholder="mac a&zwnj;ddress" pattern="([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]" value="{{o.mac}}">
+                                            <label><input type="checkbox" {{o.noprop ? "checked" : ""}}></label>
+                                        </div>
+                                        <button>-</button>
+                                    </div>
+                        {%      }
+                            }
+                        } %}
+                        </div>
+                    </form>
+                    <hr>
+                    <div class="o">Active Leases</div>
+                    <div class="m">Addresses currently in use</div>
+                    {{_H("The list of active leases currently allocated to LAN devices. Any of these leases can be promoted
+                    to a permanent mapping to allow IP Addresses to be fixed to specific devices.")}}
+                    {% if (active > 0) {
+                    %}
+                                <div class="lease-label adr">
+                                    <div>
+                                        <div>hostname</div>
+                                        <div>ip address</div>
+                                        <div>mac a&zwnj;ddress</div>
+                                    </div>
+                                    <div></div>
+                                </div>
+                    {%
+                        for (let i = 0; i < length(options); i++) {
+                            const o = options[i];
+                            if (o.leased) {
+                    %}
+                                <div class="lease adr" data-ip="{{o.ip}}">
+                                    <div>
+                                        <input readonly type="text" value="{{o.name}}">
+                                        <input readonly type="text" value="{{o.ip}}">
+                                        <input readonly type="text" value="{{o.mac}}">
+                                    </div>
+                                    <button {{o.reserved ? "disabled" : ""}}>+</button>
+                                </div>
+                    {%      }
+                        }
+                    } %}
+                </div>
+                {{_R("dialog-advanced")}}
+                <div>
+                {% if (includeAdvanced) { %}
+                    <form>
+                        <div class="dhcp-tags">
+                            <div class="cols">
+                                <div>
+                                    <div class="o">Tags</div>
+                                    <div class="m">Tags for advanced options</div>
+                                </div>
+                                <button>+</button>
+                            </div>
+                            <div class="dhcptag-label adr">
+                                <div class="row">
+                                    <div>tag</div>
+                                    <div>type</div>
+                                    <div>match</div>
+                                    <div></div>
+                                </div>
+                                <div></div>
+                            </div>
+                            <div class="list noborder">{%
+                            for (let i = 0; i < length(advtags); i++) {
+                                const t = advtags[i];
+                                %}<div class="tag adr">
+                                    <div class="row">
+                                        <input name="tag_name" type="text" required value="{{t.name}}">
+                                        <select name="tag_type" required>
+                                            <option value="">-</option>
+                                            <option value="vendorclass" {{t.type == "vendorclass" ? "selected": ""}}>Vendor Class</option>
+                                            <option value="userclass" {{t.type == "userclass" ? "selected": ""}}>User Class</option>
+                                            <option value="mac" {{t.type == "mac" ? "selected": ""}}>MAC Address</option>
+                                            <option value="circuitid" {{t.type == "circuitid" ? "selected": ""}}>Agent Circuit ID</option>
+                                            <option value="remoteid" {{t.type == "remoteid" ? "selected": ""}}>Agent Remote ID</option>
+                                            <option value="subscriberid" {{t.type == "subscriberid" ? "selected": ""}}>Subscriber-ID</option>
+                                        </select>
+                                        <input name="tag_match" type="text" required value="{{t.match}}">
+                                        <div></div>
+                                    </div>
+                                    <button>-</button>
+                                </div>{%
+                            }
+                            %}</div>
+                        </div>
+                    </form>
+                    <form>
+                        <div class="dhcp-options">
+                            <div class="cols">
+                                <div>
+                                    <div class="o">Options</div>
+                                    <div class="m">Advanced options</div>
+                                </div>
+                                <button>+</button>
+                            </div>
+                            <div class="dhcpoption-label adr">
+                                <div class="row">
+                                    <div>tag</div>
+                                    <div>option</div>
+                                    <div>value</div>
+                                    <div>always</div>
+                                </div>
+                                <div></div>
+                            </div>
+                            <div class="list noborder">{%
+                            for (let i = 0; i < length(advoptions); i++) {
+                                const o = advoptions[i];
+                                %}<div class="option adr">
+                                    <div class="row">
+                                        <select name="option_name">
+                                            <option value="{{o.name}}" selected>{{o.name}}</option>
+                                        </select>
+                                        <input name="option_type" type="text" required list="dhcp-option-type-list" value="{{dhcpOptionTypes[o.type] ? `${o.type}: ${dhcpOptionTypes[o.type][0]}` : o.type}}" pattern="([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(: .+)?">
+                                        <input name="option_value" type="text" required value="{{o.value}}">
+                                        <label><input name="option_always" type="checkbox" {{o.always ? "checked" : ""}}></label>
+                                    </div>
+                                    <button>-</button>
+                                </div>{%
+                            }
+                            %}</div>
+                        </div>
+                    </form>
+                {% } %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <datalist id="dhcp-option-type-list">
+    {%
+        for (let k in dhcpOptionTypes) {
+            print(`<option value="${k}: ${dhcpOptionTypes[k][0]}"></option>`);
+        }
+    %}
+    </datalist>
+    {{_R("dialog-footer")}}
+    <script>
+    (function(){
+        {{_R("open")}}
+        const options = {{sprintf("%J", options)}};
+        function update()
+        {
+            htmx.ajax("PUT", "{{request.env.REQUEST_URI}}", {
+                swap: "none",
+                values: { options: JSON.stringify(options) }
+            });
+        }
+        function refreshIPSelectors()
+        {
+            const addrs = htmx.findAll(".dhcp-addresses");
+            for (let i = 0; i < addrs.length; i++) {
+                let opt = "";
+                for (let j = 0; j < options.length; j++) {
+                    const o = options[j];
+                    const self = o.ip === addrs[i].parentNode.parentNode.dataset.ip;
+                    if (self || (!o.leased && !o.reserved)) {
+                        opt += `<option value="${o.ip}" ${self ? "selected" : ""}>${o.ip}</option>`;
+                    }
+                }
+                addrs[i].innerHTML = opt;
+            }
+        }
+        refreshIPSelectors();
+        htmx.on("#ctrl-modal .dialog .dhcp", "change", event => {
+            const target = event.target;
+            switch (target.nodeName) {
+                case "SELECT":
+                {
+                    const oldip = target.parentNode.parentNode.dataset.ip;
+                    const newip = target.value;
+                    const oo = options.find(o => o.ip == oldip);
+                    const no = options.find(o => o.ip == newip);
+                    Object.assign(no, { name: oo.name, mac: oo.mac, noprop: oo.noprop, reserved: true, leased: false });
+                    Object.assign(oo, { name: "", mac: "", noprop: false, reserved: false, leased: false });
+                    target.parentNode.parentNode.dataset.ip = newip;
+                    refreshIPSelectors();
+                    update();
+                    break;
+                }
+                case "INPUT":
+                    switch (target.type) {
+                        case "text":
+                        {
+                            if (target.validity.valid) {
+                                const ip = target.parentNode.parentNode.dataset.ip;
+                                const o = options.find(o => o.ip == ip);
+                                if (target.name === "hostname") {
+                                    o.name = target.value;
+                                }
+                                else {
+                                    o.mac = target.value;
+                                }
+                                update();
+                            }
+                            break;
+                        }
+                        case "checkbox":
+                        {
+                            const ip = target.parentNode.parentNode.parentNode.dataset.ip;
+                            const o = options.find(o => o.ip == ip);
+                            o.noprop = target.checked;
+                            update();
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+        htmx.on("#ctrl-modal .dialog .dhcp", "click", event => {
+            const target = event.target;
+            switch (target.nodeName) {
+                case "BUTTON":
+                    switch (target.innerText) {
+                        case "+":
+                        {
+                            const ip = target.parentNode.dataset.ip;
+                            if (ip) {
+                                target.disabled = true;
+                                const o = options.find(o => o.ip == ip);
+                                o.reserved = true;
+                                o.noprop = true;
+                                const item = document.createElement("div");
+                                item.innerHTML = `<div class="reservation adr" data-ip="${o.ip}"><div style="white-space:nowrap"><input name="hostname" type="text" placeholder="hostname" value="${o.name}" required> <select class="dhcp-addresses"></select> <input name="mac" type="text" placeholder="mac a&zwnj;ddress" required pattern="([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]" value="${o.mac}"><label> <input type="checkbox" ${o.noprop ? "checked" : ""}></label></div><button>-</button></div>`;
+                                htmx.find("#dhcp-reservations").appendChild(item.firstChild);
+                                update();
+                                refreshIPSelectors();
+                            }
+                            else {
+                                function newDHCPEntry()
+                                {
+                                    const o = options.find(o => !o.reserved && !o.leased);
+                                    if (o) {
+                                        Object.assign(o, { name: "", mac: "", noprop: true, reserved: true, leased: false });
+                                        const item = document.createElement("div");
+                                        item.innerHTML = `<div class="reservation adr" data-ip="${o.ip}"><div style="white-space:nowrap"><input name="hostname" type="text" placeholder="hostname" value="${o.name}" required> <select class="dhcp-addresses"></select> <input name="mac" type="text" placeholder="mac a&zwnj;ddress" required pattern="([0-9a-fA-F][0-9a-fA-F]:){5}[0-9a-fA-F][0-9a-fA-F]" value="${o.mac}"><label> <input type="checkbox" ${o.noprop ? "checked" : ""}></label></div><button>-</button></div>`;
+                                        const fc = item.firstChild;
+                                        htmx.find("#dhcp-reservations").appendChild(fc);
+                                        htmx.find(fc, "input").focus();
+                                        htmx.on(fc, "keypress", event => {
+                                            if (event.keyCode === 13 && event.target.nodeName == "INPUT" && htmx.closest(event.target, ".reservation") === htmx.find("#dhcp-reservations .reservation:last-child")) {
+                                                event.preventDefault();
+                                                newDHCPEntry();
+                                            }
+                                        });
+                                    }
+                                    if (!options.find(o => !o.reserved && !o.leased)) {
+                                        htmx.find("#ctrl-modal .dialog .dhcp .plus").disabled = true;
+                                    }
+                                    refreshIPSelectors();
+                                }
+                                newDHCPEntry();
+                            }
+                            break;
+                        }
+                        case "-":
+                        {
+                            const ip = target.parentNode.dataset.ip;
+                            const o = options.find(o => o.ip == ip);
+                            o.reserved = false;
+                            if (o.leased) {
+                                const l = htmx.find(`#ctrl-modal .dialog .lease[data-ip="${ip}"] button`);
+                                l.disabled = false;
+                            }
+                            const item = target.parentNode;
+                            htmx.remove(item);
+                            htmx.find("#ctrl-modal .dialog .dhcp button").disabled = false;
+                            refreshIPSelectors();
+                            update();
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+        {% if (includeAdvanced) { %}
+        function refreshAdvOptions()
+        {
+            const tagnames = [];
+            const names = htmx.findAll("#ctrl-modal .dialog .dhcp-tags .list .row input[name=tag_name]");
+            for (let i = 0; i < names.length; i++) {
+                if (names[i].validity.valid && tagnames.indexOf(names[i].value) === -1) {
+                    tagnames.push(names[i].value);
+                }
+            }
+            const options = htmx.findAll("#ctrl-modal .dialog .dhcp-options .list .row select[name=option_name]");
+            for (let i = 0; i < options.length; i++) {
+                const v = options[i].value;
+                options[i].innerHTML = "<option value=''>[all]</option>" + tagnames.map(t => `<option value="${t}" ${t === v ? "selected": ""}>${t}</option>`).join("");
+            }
+        }
+        function refreshTags()
+        {
+            const tags = htmx.findAll("#ctrl-modal .dialog .dhcp-tags .list .row");
+            for (let i = 0; i < tags.length; i++) {
+                const type = htmx.find(tags[i], "select[name=tag_type]");
+                const match = htmx.find(tags[i], "input[name=tag_match]");
+                switch (type.value) {
+                    case "mac":
+                        match.pattern = "(?:(?:[0-9a-fA-F]{2}|\\*):){5}(?:[0-9a-fA-F]{2}|\\*)";
+                        match.placeholder = "*:*:*:*:*:*";
+                        break;
+                    case "circuitid":
+                    case "remoteid":
+                        match.pattern = "(?:(?:[0-9a-fA-F]{2}|\\*):)*(?:[0-9a-fA-F]{2}|\\*)";
+                        match.placeholder = "12:3a:bc";
+                        break;
+                    case "subscriberid":
+                        match.pattern = "(?:[ -\\[\\]-~]|\\\\[\\\\benrt])+";
+                        match.placeholder = "";
+                        break;
+                    case "-":
+                    case "vendorclass":
+                    case "userclass":
+                    default:
+                        match.pattern = ".+";
+                        match.placeholder = "";
+                        break;
+                }
+            }
+        }
+        function updateTags()
+        {
+            if (!htmx.closest(htmx.find("#ctrl-modal .dialog .dhcp-tags"), "form").checkValidity()) {
+                return;
+            }
+            const advtags = [];
+            const tags = htmx.findAll("#ctrl-modal .dialog .dhcp-tags .list .row");
+            for (let i = 0; i < tags.length; i++) {
+                const name = htmx.find(tags[i], "input[name=tag_name]");
+                const type = htmx.find(tags[i], "select[name=tag_type]");
+                const match = htmx.find(tags[i], "input[name=tag_match]");
+                if (name.validity.valid && type.validity.valid && match.validity.valid) {
+                    advtags.push({ name: name.value, type: type.value, match: match.value });
+                }
+            }
+            htmx.ajax("PUT", "{{request.env.REQUEST_URI}}", {
+                swap: "none",
+                values: { advtags: JSON.stringify(advtags) }
+            });
+        }
+        const dhcpOptionTypes = {%print(dhcpOptionTypes);%};
+        const dhcpOptionTypesPatterns = {
+            "?": [".*",],
+            ip: ["(?:(?:25[0-5]|(?:2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}", "IP Address"],
+            ips: ["(?:(?:(?:25[0-5]|(?:2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4},?\\b)+", "IP Addresses"],
+            ipips: ["(?:(?:(?:(?:(?:25[0-5]|(?:2[0-4]|1[0-9]|[1-9]|)[0-9])\\.?\\b){4}),?\\b){2})+", "IP,IP pairs"],
+            mask: ["(?:(?:1(?:28|92)|2(?:24|4[08]|5[24]))(?:\\.0){3})|(?:255\\.(?:(?:(?:0|1(?:28|92)|2(?:24|4[08]|5[24]))(?:\\.0){2})|(?:255\\.(?:(?:(?:0|1(?:28|92)|2(?:24|4[08]|5[24]))\\.0)|255\\.(?:0|1(?:28|92)|2(?:24|4[08]|5[24]))))))", "Network mask"],
+            mac: ["(?:[0-9a-fA-F]{2}:?\\b){6}", "xx:xx:xx:xx:xx:xx"],
+            flag: ["[01]", "0 or 1"],
+            none: ["(hidden)", "None"],
+            text: [".+", "Text..."],
+            uint16: ["(number)", "0...65535", 0, 65535],
+            int32: ["(number)", "Integer", -2147483648, 2147483647],
+            uint32: ["(number)", "Unsigned integer", 0, 4294967295],
+            "1...255": ["(number)", "1...255", 1, 255],
+            "1...65535": ["(number)", "1...65535", 1, 65535],
+            "68...65535": ["(number)", "68...65535", 68, 65535],
+            "576...65535": ["(number)", "576...65535", 576, 65535],
+            "time": ["\\d+[sSmMhHdDwW]?", "Time (s, m, h, d, w)"],
+            dns: ["(?:(?!-))(?:(?:xn--)?[A-Za-z0-9][A-Za-z0-9\\-]{0,61}[A-Za-z0-9]{0,1}\\.)*(?:xn--)?(?:[A-Za-z0-9\\-]{1,61}|[A-Za-z0-9\\-]{1,30}\\.[A-Za-z]{2,})", "Host DNS name"]
+        };
+        function refreshOptions()
+        {
+            const options = htmx.findAll("#ctrl-modal .dialog .dhcp-options .list .row");
+            for (let i = 0; i < options.length; i++) {
+                const name = htmx.find(options[i], "select[name=option_name]");
+                const type = htmx.find(options[i], "input[name=option_type]");
+                const value = htmx.find(options[i], "input[name=option_value]");
+                const always = htmx.find(options[i], "input[name=option_always]");
+                if (!type.validity.valid) {
+                    value.pattern = "";
+                }
+                else {
+                    value.disabled = false;
+                    value.min = "";
+                    value.max = "";
+                    value.required = true;
+                    value.style.visibility = null;
+                    value.type = "text";
+                    const types = dhcpOptionTypes[`${parseInt(type.value)}`];
+                    if (types) {
+                        const pat = dhcpOptionTypesPatterns[types[1]];
+                        if (pat) {
+                            value.pattern = "";
+                            value.placeholder = pat[1];
+                            switch (pat[0]) {
+                                case "(number)":
+                                    value.type = "number";
+                                    value.min = pat[2];
+                                    value.max = pat[3];
+                                    break;
+                                case "(hidden)":
+                                    value.style.visibility = "hidden";
+                                    value.value = "";
+                                    value.required = false;
+                                    break;
+                                default:
+                                    value.pattern = pat[0];
+                                    break;
+                            }
+                        }
+                        else {
+                            value.pattern = types[1];
+                            value.placeholder = types[2] || "";
+                        }
+                    }
+                    else {
+                        value.pattern = ".*";
+                        value.placeholder = "";
+                    }
+                }
+            }
+        }
+        function updateOptions()
+        {
+            if (!htmx.closest(htmx.find("#ctrl-modal .dialog .dhcp-options"), "form").checkValidity()) {
+                return;
+            }
+            const advoptions = [];
+            const options = htmx.findAll("#ctrl-modal .dialog .dhcp-options .list .row");
+            for (let i = 0; i < options.length; i++) {
+                const name = htmx.find(options[i], "select[name=option_name]");
+                const type = htmx.find(options[i], "input[name=option_type]");
+                const value = htmx.find(options[i], "input[name=option_value]");
+                const always = htmx.find(options[i], "input[name=option_always]");
+                const tvalue = type.validity.valid ? `${parseInt(type.value)}` : "";
+                if (name.validity.valid && type.validity.valid && value.validity.valid) {
+                    advoptions.push({ name: name.value, type: tvalue, value: value.value, always: !!always.checked });
+                }
+                if (dhcpOptionTypes[tvalue]) {
+                    type.value = `${tvalue}: ${dhcpOptionTypes[tvalue][0]}`;
+                }
+            }
+            htmx.ajax("PUT", "{{request.env.REQUEST_URI}}", {
+                swap: "none",
+                values: { advoptions: JSON.stringify(advoptions) }
+            });
+        }
+        htmx.on("#ctrl-modal .dialog .dhcp-tags", "click", event => {
+            const target = event.target;
+            switch (target.nodeName) {
+                case "BUTTON":
+                    switch (target.innerText) {
+                        case "+":
+                            function addNewTag()
+                            {
+                                const item = document.createElement("div");
+                                item.innerHTML = `<div class="tag adr"><div class="row"><input name="tag_name" type="text" required value=""> <select name="tag_type" required><option value="">-</option><option value="vendorclass">Vendor Class</option><option value="userclass">User Class</option><option value="mac">MAC Address</option><option value="circuitid">Agent Circuit ID</option><option value="remoteid">Agent Remote ID</option><option value="subscriberid">Subscriber-ID</option></select> <input name="tag_match" type="text" required value=""><div></div></div><button>-</button></div>`;
+                                const fc = item.firstChild;
+                                htmx.find("#ctrl-modal .dialog .dhcp-tags .list").appendChild(fc);
+                                htmx.find(fc, "input").focus();
+                                htmx.on(fc, "keypress", event => {
+                                    if (event.keyCode === 13 && event.target.nodeName == "INPUT" && htmx.closest(event.target, ".tag") === htmx.find(".dhcp-tags .list .tag:last-child")) {
+                                        event.preventDefault();
+                                        addNewTag();
+                                    }
+                                });
+                            }
+                            addNewTag();
+                            break;
+                        case "-":
+                            const row = target.parentNode;
+                            row.parentNode.removeChild(row);
+                            refreshAdvOptions();
+                            updateTags();
+                            updateOptions();
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+        htmx.on("#ctrl-modal .dialog .dhcp-tags", "change", _ => {
+            refreshAdvOptions();
+            refreshTags();
+            updateTags();
+        });
+        htmx.on("#ctrl-modal .dialog .dhcp-options", "click", event => {
+            const target = event.target;
+            switch (target.nodeName) {
+                case "BUTTON":
+                    switch (target.innerText) {
+                        case "+":
+                            function addNewOption()
+                            {
+                                const item = document.createElement("div");
+                                item.innerHTML = `<div class="option adr"><div class="row"><select name="option_name"><option value="">[all]</option></select> <input name="option_type" type="text" required list="dhcp-option-type-list" pattern="([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(: .+)?"> <input name="option_value" type="text" required value=""> <label><input name="option_always" type="checkbox"></label></div><button>-</button></div>`;
+                                const fc = item.firstChild;
+                                htmx.find("#ctrl-modal .dialog .dhcp-options .list").appendChild(fc);
+                                refreshAdvOptions();
+                                htmx.find(fc, "select").focus();
+                                htmx.on(fc, "keypress", event => {
+                                    if (event.keyCode === 13 && event.target.nodeName == "INPUT" && htmx.closest(event.target, ".option") === htmx.find(".dhcp-options .list .option:last-child")) {
+                                        event.preventDefault();
+                                        addNewOption();
+                                    }
+                                });
+                            }
+                            addNewOption();
+                            break;
+                        case "-":
+                            const row = target.parentNode;
+                            row.parentNode.removeChild(row);
+                            updateOptions();
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        });
+        htmx.on("#ctrl-modal .dialog .dhcp-options", "change", _ => {
+            refreshOptions();
+            updateOptions();
+        });
+        refreshTags();
+        refreshOptions();
+        refreshAdvOptions();
+        {% } %}
+    })();
+    </script>
+</div>

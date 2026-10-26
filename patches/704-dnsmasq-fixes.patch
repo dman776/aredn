@@ -1,0 +1,38 @@
+--- a/package/network/services/dnsmasq/files/dnsmasq.init
++++ b/package/network/services/dnsmasq/files/dnsmasq.init
+@@ -1244,7 +1244,7 @@
+ 	procd_set_param command $PROG -C $CONFIGFILE -k -x /var/run/dnsmasq/dnsmasq."${cfg}".pid
+ 	procd_set_param file $CONFIGFILE
+ 	[ -n "$user_dhcpscript" ] && procd_set_param env USER_DHCPSCRIPT="$user_dhcpscript"
+-	procd_set_param respawn
++	procd_set_param respawn 1 5 50
+ 
+ 	local instance_ifc instance_netdev
+ 	config_get instance_ifc "$cfg" interface
+
+--- a/package/network/services/dnsmasq/files/dnsmasq.init
++++ b/package/network/services/dnsmasq/files/dnsmasq.init
+@@ -477,10 +477,7 @@
+ 	config_get_bool force "$cfg" force 0
+ 	[ "$force" = "0" ] && force=
+ 
+-	config_get option "$cfg" dhcp_option
+-	for o in $option; do
+-		xappend "--dhcp-option${force:+-force}=tag:$tag,$o"
+-	done
++	config_list_foreach "$cfg" dhcp_option dhcp_option_append "tag:$tag" "$force"
+ }
+ 
+ dhcp_mac_add() {
+
+--- a/package/network/services/dnsmasq/files/dnsmasq.init
++++ b/package/network/services/dnsmasq/files/dnsmasq.init
+@@ -582,7 +582,7 @@
+ 	config_list_foreach "$cfg" "interface_name" append_interface_name "$ifname"
+ 
+ 	# Put the router host name on this DHCP served interface address(es)
+-	dhcp_this_host_add "$net" "$ifname" "$ADD_LOCAL_FQDN"
++	# dhcp_this_host_add "$net" "$ifname" "$ADD_LOCAL_FQDN"
+ 
+ 	start="$( dhcp_calc "$start" )"
+ 

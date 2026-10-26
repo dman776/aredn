@@ -1,0 +1,87 @@
+#!/usr/bin/ucode
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2023-2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+
+import * as fs from "fs";
+import * as uci from "uci";
+
+const packageStore = "/etc/package_store";
+const packageCatalog = `${packageStore}/catalog.json`;
+
+function apk_with_retry(arg)
+{
+	for (let i = 0; i < 5; i++) {
+		if (system(`/usr/bin/apk ${arg} 2>/dev/null`) != 255) {
+			break;
+		}
+		sleep(5000);
+	}
+}
+
+apk_with_retry("info > /etc/permpkg");
+
+if (fs.access(packageCatalog)) {
+	// Make sure we can contact the package server before proceeding.
+	// We will wait a few minutes before going ahead anyway
+	const pkghost = match(uci.cursor().get("aredn", "@downloads[0]", "packages_default"), /^https?:\/\/([^/]+)/)[1];
+	for (let i = 0; i < 5; i++) {
+		if (system(`ping -q -c 1 -W 5 ${pkghost} > /dev/null 2>&1`) == 0) {
+			break;
+		}
+		print("Failed to contact package server - retry in 60 seconds\n");
+		sleep(60000);
+	}
+
+    apk_with_retry("update");
+    const catalog = json(fs.readfile(packageCatalog));
+	for (let pkg in catalog.installed) {
+		const state = catalog.installed[pkg];
+        if (state == "local") {
+			fs.unlink(`${packageStore}/${pkg}.ipk`); // Remove the old format packages
+            const file = `${packageStore}/${pkg}.apk`;
+            if (fs.access(file)) {
+                apk_with_retry(`add --allow-untrusted ${file}`);
+			}
+			else {
+				delete catalog.installed[pkg];
+			}
+		}
+        else if (state == "global") {
+            apk_with_retry(`add ${pkg}`);
+		}
+	}
+	fs.writefile(packageCatalog, sprintf("%J", catalog));
+}
+
+// Don't do this again
+fs.unlink("/etc/cron.boot/reinstall-packages");

@@ -1,48 +1,63 @@
-#### Loopback configuration
-config interface loopback
-	option ifname	"lo"
-	option proto	static
-	option ipaddr	127.0.0.1
-	option netmask	255.0.0.0
+#### Globals
+config globals 'globals'
+	option packet_steering '1'
 
+#### Loopback configuration
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+#### Main IP
+config device 'brmesh'
+	option name 'br-mesh'
+	option type 'bridge'
+	option bridge_empty '1'
+
+config interface 'mesh'
+	option device 'br-mesh'
+	option proto 'static'
+	option ipaddr '<wifi_ip>'
+	option netmask '255.255.255.255'
+	option dns '<wan_dns1> <wan_dns2>'
+
+### Bridge configuration
+<bridge_network_config>
+
+config device 'brfast'
+	option name 'br-fast'
+	option type 'bridge'
+	option bridge_empty '1'
+
+config interface 'fast'
+	option device 'br-fast'
+
+#### WIFI configuration
+<wifi_network_config>
+<wifi0_network_config>
+<wifi1_network_config>
 
 #### LAN configuration
-config interface lan
-	option ifname	"<lan_intf>"
-	option type	"bridge"
-	option proto	<lan_proto>
-	option ipaddr	<lan_ip>
-	option netmask	<lan_mask>
-	option dns	"<wan_dns1> <wan_dns2>"
-	option gateway	<lan_gw>
-include /etc/aredn_include/ethmacfixup
+<lan_network_config>
 
 #### WAN configuration
-config interface wan
-	option ifname	"<wan_intf>"
-include /etc/aredn_include/bridge_ports
-	option proto	<wan_proto>
-	option ipaddr	<wan_ip>
-	option netmask	<wan_mask>
-	option gateway  <wan_gw>
-	
-	
-#### WIFI configuration
-config interface wifi
-	option ifname	"<wifi_intf>"
-	option proto	<wifi_proto>
-	option ipaddr	<wifi_ip>
-	option netmask	<wifi_mask>
+<wan_network_config>
 
-#### device to device configuration
-config interface dtdlink
-        option ifname   "<dtdlink_intf>"
-include /etc/aredn_include/bridge_ports
-        option proto    static
-        option ipaddr   <dtdlink_ip>
-        option netmask  255.0.0.0
+#### DtD configuration
+<dtdlink_network_config>
 
-config interface wifi_mon
-        option proto 	none
-
+### Switch configuration
 include /etc/aredn_include/swconfig
+
+### Static routes
+include /etc/aredn_include/static_routes
+
+### Extra vlans
+include /etc/aredn_include/vlans
+
+### Extra links
+include /etc/config.mesh/xlink
+
+### Wireguard
+<wireguard_network_config>

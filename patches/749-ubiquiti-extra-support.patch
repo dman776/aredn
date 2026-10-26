@@ -1,0 +1,390 @@
+--- a/target/linux/ath79/image/generic-ubnt.mk
++++ b/target/linux/ath79/image/generic-ubnt.mk
+@@ -117,6 +117,22 @@
+ endef
+ TARGET_DEVICES += ubnt_nanostation-loco-m-xw
+ 
++define Device/ubnt_nanobeam-m5-19
++  $(Device/ubnt-xw)
++  DEVICE_MODEL := Nanobeam M5 19
++  DEVICE_PACKAGES += rssileds
++  SUPPORTED_DEVICES += loco-m-xw ubnt,nanostation-loco-m-xw
++endef
++TARGET_DEVICES += ubnt_nanobeam-m5-19
++
++define Device/ubnt_nanobeam-m5-16
++  $(Device/ubnt-xw)
++  DEVICE_MODEL := Nanobeam M5 16
++  DEVICE_PACKAGES += rssileds
++  SUPPORTED_DEVICES += loco-m-xw ubnt,nanostation-loco-m-xw
++endef
++TARGET_DEVICES += ubnt_nanobeam-m5-16
++
+ define Device/ubnt_nanostation-m-xw
+   $(Device/ubnt-xw)
+   DEVICE_MODEL := Nanostation M
+--- /dev/null
++++ b/target/linux/ath79/dts/ar9342_ubnt_nanobeam-m5-19.dts
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++#include "ar9342_ubnt_xw.dtsi"
++
++/ {
++	compatible = "ubnt,nanobeam-m5-19", "ubnt,xw", "qca,ar9342";
++	model = "Ubiquiti Nanobeam M5 19";
++};
++
++&mdio0 {
++	status = "okay";
++
++	phy-mask = <0x1>;
++
++	phy1: ethernet-phy@1 {
++		reg = <1>;
++		phy-mode = "mii";
++		reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
++	};
++};
++
++&eth0 {
++	status = "okay";
++
++	phy-handle = <&phy1>;
++};
+--- /dev/null
++++ b/target/linux/ath79/dts/ar9342_ubnt_nanobeam-m5-16.dts
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++#include "ar9342_ubnt_xw.dtsi"
++
++/ {
++	compatible = "ubnt,nanobeam-m5-16", "ubnt,xw", "qca,ar9342";
++	model = "Ubiquiti Nanobeam M5 16";
++};
++
++&mdio0 {
++	status = "okay";
++
++	phy-mask = <0x1>;
++
++	phy1: ethernet-phy@1 {
++		reg = <1>;
++		phy-mode = "mii";
++		reset-gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
++	};
++};
++
++&eth0 {
++	status = "okay";
++
++	phy-handle = <&phy1>;
++};
+--- a/target/linux/ath79/generic/base-files/etc/board.d/02_network
++++ b/target/linux/ath79/generic/base-files/etc/board.d/02_network
+@@ -96,6 +96,7 @@
+ 	ubnt,litebeam-ac-gen2|\
+ 	ubnt,nanobeam-ac|\
+ 	ubnt,nanobeam-ac-xc|\
++	ubnt,nanobeam-m5-1[69]|\
+ 	ubnt,nanostation-ac-loco|\
+ 	ubnt,nanostation-loco-m-xw|\
+ 	ubnt,powerbeam-5ac-500|\
+--- a/target/linux/ath79/image/generic-ubnt.mk
++++ b/target/linux/ath79/image/generic-ubnt.mk
+@@ -165,6 +165,31 @@
+ endef
+ TARGET_DEVICES += ubnt_powerbeam-5ac-gen2
+ 
++define Device/ubnt_powerbeam-5ac-300
++  $(Device/ubnt-wa)
++  DEVICE_MODEL := PowerBeam 5AC
++  DEVICE_VARIANT := 300
++  DEVICE_PACKAGES := kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt rssileds
++endef
++TARGET_DEVICES += ubnt_powerbeam-5ac-300
++
++define Device/ubnt_powerbeam-5ac-400
++  $(Device/ubnt-wa)
++  DEVICE_MODEL := PowerBeam 5AC
++  DEVICE_VARIANT := 400
++  DEVICE_PACKAGES := kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt rssileds
++endef
++TARGET_DEVICES += ubnt_powerbeam-5ac-400
++
++define Device/ubnt_powerbeam-5ac-620
++  $(Device/ubnt-xc)
++  SOC := qca9558
++  DEVICE_MODEL := PowerBeam 5AC
++  DEVICE_VARIANT := 620
++  DEVICE_PACKAGES := kmod-ath10k-ct ath10k-firmware-qca988x-ct-full-htt
++endef
++TARGET_DEVICES += ubnt_powerbeam-5ac-620
++
+ define Device/ubnt_powerbeam-m2-xw
+   $(Device/ubnt-xw)
+   DEVICE_MODEL := PowerBeam M2
+--- /dev/null
++++ b/target/linux/ath79/dts/ar9342_ubnt_powerbeam-5ac-400.dts
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "ar9342_ubnt_wa_1port.dtsi"
++
++/ {
++	compatible = "ubnt,powerbeam-5ac-400", "ubnt,wa", "qca,ar9342";
++	model = "Ubiquiti PowerBeam 5AC 400";
++
++	aliases {
++		led-boot = &led_rssi3;
++		led-failsafe = &led_rssi3;
++		led-upgrade = &led_rssi3;
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		rssi0 {
++			label = "blue:rssi0";
++			gpios = <&gpio 11 GPIO_ACTIVE_LOW>;
++		};
++
++		rssi1 {
++			label = "blue:rssi1";
++			gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
++		};
++
++		rssi2 {
++			label = "blue:rssi2";
++			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
++		};
++
++		led_rssi3: rssi3 {
++			label = "blue:rssi3";
++			gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
++		};
++	};
++};
+--- /dev/null
++++ b/target/linux/ath79/dts/ar9342_ubnt_powerbeam-5ac-300.dts
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "ar9342_ubnt_powerbeam-5ac-400.dts"
++
++/ {
++        compatible = "ubnt,powerbeam-5ac-300", "ubnt,wa", "qca,qca9558";
++        model = "Ubiquiti PowerBeam 5AC 300";
++};
+--- /dev/null
++++ b/target/linux/ath79/dts/qca9558_ubnt_powerbeam-5ac-620.dts
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "qca9558_ubnt_powerbeam-5ac-500.dts"
++
++/ {
++        compatible = "ubnt,powerbeam-5ac-620", "ubnt,xc", "qca,qca9558";
++        model = "Ubiquiti PowerBeam 5AC 620";
++};
+--- a/target/linux/ath79/generic/base-files/etc/board.d/02_network
++++ b/target/linux/ath79/generic/base-files/etc/board.d/02_network
+@@ -101,6 +101,8 @@
+ 	ubnt,nanostation-ac-loco|\
+ 	ubnt,nanostation-loco-m-xw|\
+ 	ubnt,powerbeam-5ac-500|\
++	ubnt,powerbeam-5ac-400|\
++	ubnt,powerbeam-5ac-620|\
+ 	ubnt,powerbeam-5ac-gen2|\
+ 	ubnt,powerbeam-m2-xw|\
+ 	ubnt,powerbeam-m5-xw|\
+--- a/target/linux/ath79/image/generic-ubnt.mk
++++ b/target/linux/ath79/image/generic-ubnt.mk
+@@ -87,6 +87,15 @@
+ endef
+ TARGET_DEVICES += ubnt_nanobeam-ac-xc
+ 
++define Device/ubnt_nanobeam-ac-gen2-xc
++  $(Device/ubnt-xc)
++  SOC := qca9558
++  DEVICE_MODEL := NanoBeam AC
++  DEVICE_VARIANT := Gen2 (XC)
++  DEVICE_PACKAGES += kmod-ath10k-ct ath10k-firmware-qca988x-ct-full-htt rssileds
++endef
++TARGET_DEVICES += ubnt_nanobeam-ac-gen2-xc
++
+ define Device/ubnt_nanostation-ac
+   $(Device/ubnt-wa)
+   DEVICE_MODEL := Nanostation AC
+--- /dev/null
++++ b/target/linux/ath79/dts/qca9558_ubnt_nanobeam-ac-gen2-xc.dts
+@@ -0,0 +1,101 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Device Tree file for Ubiquiti Nanobeam NBE-5AC-19 (XC)
++ *
++ * Copyright (C) 2022 Daniel González Cabanelas <dgcbueu@gmail.com>
++ * based on device tree from qca9558_ubnt_powerbeam-5ac-500.dts
++ */
++ 
++#include "qca955x_ubnt_xc.dtsi"
++
++/ {
++	compatible = "ubnt,nanobeam-ac-gen2-xc", "ubnt,xc", "qca,qca9558";
++	model = "Ubiquiti NanoBeam AC Gen2 (XC)";
++
++	aliases {
++		led-boot = &led_power;
++		led-failsafe = &led_power;
++		led-running = &led_power;
++		led-upgrade = &led_power;
++	};
++
++	keys {
++		compatible = "gpio-keys";
++
++		reset {
++			label = "Reset button";
++			linux,code = <KEY_RESTART>;
++			gpios = <&gpio 19 GPIO_ACTIVE_LOW>;
++			debounce-interval = <60>;
++		};
++	};
++
++	led_spi {
++		compatible = "spi-gpio";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		sck-gpios  = <&gpio 0 GPIO_ACTIVE_HIGH>;
++		mosi-gpios = <&gpio 1 GPIO_ACTIVE_HIGH>;
++		cs-gpios   = <&gpio 3 GPIO_ACTIVE_HIGH>;
++		num-chipselects = <1>;
++
++		led_gpio: led_gpio@0 {
++			compatible = "fairchild,74hc595";
++			reg = <0>;
++			gpio-controller;
++			#gpio-cells = <2>;
++			registers-number = <1>;
++			spi-max-frequency = <10000000>;
++			enable-gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
++		};
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		rssi0 {
++			label = "blue:rssi0";
++			gpios = <&led_gpio 0 GPIO_ACTIVE_LOW>;
++		};
++		rssi1 {
++			label = "blue:rssi1";
++			gpios = <&led_gpio 1 GPIO_ACTIVE_LOW>;
++		};
++		rssi2 {
++			label = "blue:rssi2";
++			gpios = <&led_gpio 2 GPIO_ACTIVE_LOW>;
++		};
++		rssi3 {
++			label = "blue:rssi3";
++			gpios = <&led_gpio 3 GPIO_ACTIVE_LOW>;
++		};
++		led_power: power {
++			label = "blue:power";
++			gpios = <&led_gpio 4 GPIO_ACTIVE_LOW>;
++			default-state = "on";
++		};
++	};
++};
++
++&mdio0 {
++	status = "okay";
++
++	phy-mask = <4>;
++	phy4: ethernet-phy@4 {
++		phy-mode = "sgmii";
++		reg = <4>;
++		at803x-override-sgmii-link-check;
++	};
++};
++
++&eth0 {
++	status = "okay";
++
++	pll-reg = <0 0x48 0>;
++	pll-data = <0x03000000 0x00000101 0x00001313>;
++	nvmem-cells = <&macaddr_art_0>;
++	nvmem-cell-names = "mac-address";
++	phy-mode = "sgmii";
++	phy-handle = <&phy4>;
++};
+--- a/target/linux/ath79/generic/base-files/etc/board.d/02_network
++++ b/target/linux/ath79/generic/base-files/etc/board.d/02_network
+@@ -96,6 +96,7 @@
+ 	ubnt,litebeam-ac-gen2|\
+ 	ubnt,nanobeam-ac|\
+ 	ubnt,nanobeam-ac-xc|\
++	ubnt,nanobeam-ac-gen2-xc|\
+ 	ubnt,nanobeam-m5-1[69]|\
+ 	ubnt,nanostation-ac-loco|\
+ 	ubnt,nanostation-loco-m-xw|\
+@@ -762,6 +763,8 @@
+ 	ubnt,litebeam-ac-gen2|\
+ 	ubnt,nanobeam-ac-gen2|\
+ 	ubnt,nanobeam-ac-xc|\
++	ubnt,nanobeam-ac-gen2-xc|\
++	ubnt,powerbeam-5ac-620|\
+ 	ubnt,powerbeam-5ac-500|\
+ 	ubnt,powerbeam-5ac-gen2)
+ 		label_mac=$(mtd_get_mac_binary art 0x5006)
+--- a/target/linux/ath79/image/generic-ubnt.mk
++++ b/target/linux/ath79/image.generic-ubnt.mk
+@@ -63,6 +63,15 @@
+ endef
+ TARGET_DEVICES += ubnt_litebeam-ac-gen2
+ 
++define Device/ubnt_litebeam-ac-lr
++  $(Device/ubnt-wa)
++  DEVICE_MODEL := LiteBeam 5AC LR
++  DEVICE_VARIANT := Gen2
++  DEVICE_PACKAGES := kmod-ath10k-ct-smallbuffers ath10k-firmware-qca988x-ct-full-htt
++  UBNT_VERSION := 8.7.4
++endef
++TARGET_DEVICES += ubnt_litebeam-ac-lr
++
+ define Device/ubnt_nanobeam-ac
+   $(Device/ubnt-wa)
+   DEVICE_MODEL := NanoBeam AC
+
+--- /dev/null
++++ b/target/linux/ath79/dts/ar9342_ubnt_litebeam-ac-lr.dts
+@@ -0,0 +1,8 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include "ar9342_ubnt_wa_1port.dtsi"
++
++/ {
++	compatible = "ubnt,litebeam-ac-lr", "ubnt,wa", "qca,ar9342";
++	model = "Ubiquiti LiteBeam 5AC LR";
++};
+--- a/target/linux/ath79/generic/base-files/etc/board.d/02_network
++++ b/target/linux/ath79/generic/base-files/etc/board.d/02_network
+@@ -102,6 +102,7 @@
+ 	ubnt,bullet-m-xw|\
+ 	ubnt,lap-120|\
+ 	ubnt,litebeam-ac-gen2|\
++	ubnt,litebeam-ac-lr|\
+ 	ubnt,litebeam-m5-xw|\
+ 	ubnt,nanobeam-ac|\
+ 	ubnt,nanobeam-ac-xc|\
+@@ -825,6 +826,7 @@
+ 		label_mac=$(cat /sys/class/ieee80211/phy0/macaddress)
+ 		;;
+ 	ubnt,litebeam-ac-gen2|\
++	ubnt,litebeam-ac-lr|\
+ 	ubnt,nanobeam-ac-gen2|\
+ 	ubnt,nanobeam-ac-xc|\
+ 	ubnt,nanobeam-ac-gen2-xc|\

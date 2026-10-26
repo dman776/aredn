@@ -1,0 +1,375 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024,2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+if (request.env.REQUEST_METHOD === "PUT") {
+    const qmac = request.args.mac;
+    const qipv6ll = request.args.ipv6ll;
+
+    const signals = {};
+    const noises = [];
+    let dev = null;
+
+    const devices = radios.getMeshRadios();
+    for (let i = 0; i < length(devices); i++) {
+        if (qmac === "average") {
+            const info = hardware.getStations(devices[i].iface);
+            for (let i = 0; i < length(info); i++) {
+                signals[info[i].mac] = info[i].sta_info.signal_avg;
+            }
+            push(noises, hardware.getRadioNoise(devices[i].iface));
+        }
+        else {
+            const info = hardware.getStation(devices[i].iface, qmac);
+            if (info && info.mac === qmac) {
+                dev = devices[i];
+                signals[info.mac] = info.sta_info.signal_avg;
+                push(noises, hardware.getRadioNoise(dev.iface));
+                break;
+            }
+        }
+    }
+    let noise = -95;
+    if (length(noises)) {
+        noise = 0;
+        map(noises, n => noise += n);
+        noise /= length(noises);
+    }
+
+    const response = { s: signals, n: noise };
+    if (dev) {
+        const ipv6ll = qipv6ll || network.mac2ipv6ll(qmac);
+        const wifimac = trim(fs.readfile(`/sys/class/net/${dev.iface}/address`));
+        const f = fs.popen(`/bin/uclient-fetch -T 1 http://[${ipv6ll}%${dev.main}]/a/s-snr?mac=${wifimac} -O - 2>/dev/null`);
+        if (f) {
+            try {
+                const j = json(f.read("all"));
+                f.close();
+                response.rs = j.s;
+                response.rn = j.n;
+            }
+            catch (_) {
+            }
+        }
+    }
+    printf("%J", response);
+    return;
+}
+lqm.reset();
+const stations = fs.lsdir("/tmp/snrlog");
+for (let i = 0; i < length(stations); i++) {
+    const s = stations[i];
+    const tracker = lqm.getTrackerByMac(s);
+    stations[i] = { hostname: tracker?.hostname, mac: s, ipv6ll: tracker?.ipv6ll };
+}
+%}
+<div class="dialog wide">
+    {{_R("tool-header", "WiFi Signal")}}
+    <div id="wifi-chart">
+        <div class="cols">
+            <div>
+                <div class="o">Node</div>
+                <div class="m">Select the target node</div>
+            </div>
+            <div style="flex:0">
+                <select id="wifi-device">
+                    {% if (length(stations) !== 1) { %}
+                    <option value="mac=average&ipv6ll=">Average</option>
+                    {% } %}
+                    {%
+                        for (let i = 0; i < length(stations); i++) {
+                            const s = stations[i];
+                            if (s) {
+                                print(`<option value="mac=${s.mac}&ipv6ll=${s.ipv6ll ?? ''}">${s.hostname || s.mac}</option>`);
+                            }
+                        }
+                    %}
+                </select>
+            </div>
+        </div>
+        <div class="cols"  style="padding:10px 0 30px 0">
+            <div style="flex:0">
+                <div id="wifi-bar">
+                    <div>- dBm<br><small>snr: -</small></div>
+                    <div style="display:flex;height:220px;padding-bottom:8px">
+                        <div class="bars">
+                            <div><div class="l"></div><div class="b" style="background-color:var(--conn-fg-color-idle)"></div></div>
+                            <div><div class="l"></div><div class="b" style="background-color:var(--conn-fg-color-good)"></div></div>
+                            <div><div class="l"></div><div class="b" style="background-color:var(--conn-fg-color-bad)"></div></div>
+                        </div>
+                        <div class="bars">
+                            <div><div class="b" style="background-color:var(--conn-fg-color-idle)"></div><div class="l"></div></div>
+                            <div><div class="b" style="background-color:var(--conn-fg-color-good)"></div><div class="l"></div></div>
+                            <div><div class="b" style="background-color:var(--conn-fg-color-bad)"></div><div class="l"></div></div>
+                        </div>
+                    </div>
+                    <div style="font-size:12px;padding:4px 16px 0 28px;">Local<div style="float:right">Remote</div></div>
+                </div>
+            </div>
+            {% if (!request.mobile) { %}
+            <div class="chart">
+                <div>
+                    <svg viewBox="0 0 200 100" preserveAspectRatio="meet">
+                        <polyline class="frame" points="10,10 10,90 190,90" />
+                        <text x="9" y="4">dBm</text>
+                        <text x="8" y="10">0</text>
+                        <text x="8" y="23">-20</text>
+                        <text x="8" y="37">-40</text>
+                        <text x="8" y="50">-60</text>
+                        <text x="8" y="63">-80</text>
+                        <text x="8" y="77">-100</text>
+                        <text x="8" y="90">-120</text>
+                        <text x="105" y="96">Last 5 minutes</text>
+                        <polyline class="rsignal" />
+                        <polyline class="signal" />
+                    </svg>
+                </div>
+            </div>
+            {% } %}
+        </div>
+        <div class="cols">
+            <div class="cols">
+                <div>
+                    <div class="o">Sound</div>
+                    <div class="m">Enable audible indicator</div>
+                </div>
+                <div>
+                    <select name="sound"><option value="off">Off</option><option value="on">On</option></select>
+                </div>
+            </div>
+            <div class="cols">
+                <div style="flex:0">
+                    <div class="o">Volume</div>
+                </div>
+                <div>
+                    <input style="width:90%" type="range" name="volume" min="0" max="10">
+                </div>
+            </div>
+            <div class="cols">
+                <div style="flex:0">
+                    <div class="o">Pitch</div>
+                </div>
+                <div>
+                    <input style="width:90%" type="range" name="pitch" min="5" max="100">
+                </div>
+            </div>
+        </div>
+        {% if (!request.mobile) { %}
+        {{_H("This tool helps to align the node's antenna with its neighbors for the best signal strength. The indicator on the left
+        shows the current, best, and worst signal strengths for the local and remote ends of a connection.
+        The graph on the right show the history of the most recent local and remote signal strengths.
+        The local and remote signal strengths are shown when a specific neighbor is selected.
+        Otherwise only the local average signal strength of all currently visible nodes is shown.<p>A sound indicator is also
+        provided which is useful when aligning antennas without looking at this display.")}}
+        {% } else { %}
+        {{_H("This tool helps to align the node's antenna with its neighbors for the best signal strength. The indicator shows the
+        current, best, and worst signal strengths for the local and remote ends of a connection.
+        The local and remote signal strengths are shown when a specific neighbor is selected.
+        Otherwise only the local average signal strength of all currently visible nodes is shown.<p>A sound indicator is also
+        provided which is useful when aligning antennas without looking at this display.")}}
+        {% } %}
+    </div>
+    {{_R("tool-footer")}}
+    <script>
+    (function(){
+        {{_R("open")}}
+        const sf = -95;
+        const st = -20;
+        const device = htmx.find("#wifi-device");
+        const target = htmx.find("#wifi-chart");
+        const bart = htmx.find("#wifi-bar > div");
+        const bar1 = htmx.find("#wifi-bar .bars:first-child > div:nth-child(1)");
+        const bar2 = htmx.find("#wifi-bar .bars:first-child > div:nth-child(2)");
+        const bar3 = htmx.find("#wifi-bar .bars:first-child > div:nth-child(3)");
+        const rbar1 = htmx.find("#wifi-bar .bars:nth-child(2) > div:nth-child(1)");
+        const rbar2 = htmx.find("#wifi-bar .bars:nth-child(2) > div:nth-child(2)");
+        const rbar3 = htmx.find("#wifi-bar .bars:nth-child(2) > div:nth-child(3)");
+        {% if (!request.mobile) { %}
+        const chart = htmx.find("#wifi-chart svg");
+        const signal = htmx.find("#wifi-chart svg .signal");
+        const rsignal = htmx.find("#wifi-chart svg .rsignal");
+        {% } %}
+    
+        let oscillator;
+        let gain;
+        function resetAudio() {
+            const audio = new AudioContext();
+            oscillator = audio.createOscillator();
+            gain = audio.createGain();
+            oscillator.connect(gain);
+            oscillator.type = "sine";
+            gain.connect(audio.destination);
+            gain.gain.value = 0;
+        }
+        resetAudio();
+
+        let smax = sf;
+        let smin = st;
+        let rsmax = sf;
+        let rsmin = st;
+        let rsl = sf;
+        let last = null;
+        const maxpoints = 300;
+        function p(v) {
+            if (v <= sf) {
+                return "0%";
+            }
+            const low = Math.max(sf, 1.05 * Math.min(smin, rsmin));
+            const range = 0.98 * Math.max(smax, rsmax) - low;
+            return `${Math.min(100, 100 * (v - low) / range)}%`;
+        }
+        function reset() {
+            last = device.value.match(/^mac=(.+)&/)[1];
+            smax = sf;
+            smin = st;
+            rsmax = sf;
+            rsmin = st;
+            bart.innerText = "dBm";
+            bar1.style.height = "";
+            bar2.style.height = "";
+            bar3.style.height = "";
+            bar1.firstElementChild.innerText = "";
+            bar2.firstElementChild.innerText = "";
+            bar3.firstElementChild.innerText = "";
+            rbar1.style.height = "";
+            rbar2.style.height = "";
+            rbar3.style.height = "";
+            rbar1.lastElementChild.innerText = "";
+            rbar2.lastElementChild.innerText = "";
+            rbar3.lastElementChild.innerText = "";
+            {% if (!request.mobile) { %}
+            signal.points.clear();
+            rsignal.points.clear();
+            {% } %}
+        }
+        const timer = setInterval(async _ => {
+            if (!document.contains(target)) {
+                clearInterval(timer);
+                return;
+            }
+            const r = await fetch("{{request.env.REQUEST_URI}}", {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "HX-Current-URL": "{{request.env.REQUEST_URI}}"
+                },
+                body: device.value
+            });
+            const j = await r.json();
+            if (last !== device.value.match(/^mac=(.+)&/)[1]) {
+                reset();
+            }
+            let s = j.s[last];
+            let rs = j.rs < 0 ? j.rs : undefined;
+            if (!s) {
+                if (last === "average") {
+                    s = Math.round(Object.values(j.s).reduce((t, v, _, a) => t + v / a.length, 0));
+                }
+                if (!s) {
+                    s = -120;
+                }
+            }
+            if (s >= sf) {
+                if (s > smax) {
+                    smax = s;
+                }
+                if (s < smin) {
+                    smin = s;
+                }
+                if (rs !== undefined) {
+                    if (rs > rsmax) {
+                        rsmax = rs;
+                    }
+                    if (rs < rsmin) {
+                        rsmin = rs;
+                    }
+                }
+                const snr = s - j.n;
+                bart.innerHTML = `${s} dBm<br><small>snr: ${snr}</small>`;
+                bar1.style.height = p(smax);
+                bar2.style.height = p(s);
+                bar3.style.height = p(smin);
+                bar1.firstElementChild.innerText = smax;
+                bar2.firstElementChild.innerText = s;
+                bar3.firstElementChild.innerText = smin;
+                if (last !== "average" && rs !== undefined) {
+                    rbar1.style.height = p(rsmax);
+                    rbar2.style.height = p(rs);
+                    rbar3.style.height = p(rsmin);
+                    rbar1.lastElementChild.innerText = rsmax;
+                    rbar2.lastElementChild.innerText = rs;
+                    rbar3.lastElementChild.innerText = rsmin;
+                    rsl = rs;
+                }
+            }
+            else {
+                bart.innerHTML = `- dBm<br><small>snr: -</small>`;
+                bar2.style.height = p(sf);
+                bar2.firstElementChild.innerText = "";
+            }
+            {% if (!request.mobile) { %}
+            if (signal.points.length >= maxpoints) {
+                signal.points.removeItem(0);
+                rsignal.points.removeItem(0);
+                for (let i = 0; i < signal.points.length; i++) {
+                    const nx = 10 + i / maxpoints * 180;
+                    signal.points[i].x = nx;
+                    rsignal.points[i].x = nx;
+                }
+            }
+            const point = chart.createSVGPoint();
+            point.x = 10 + signal.points.length / maxpoints * 180;
+            point.y = 90 - 80 * ((s > -120 ? s : -120) + 120) / 120;
+            signal.points.appendItem(point);
+            const rpoint = chart.createSVGPoint();
+            rpoint.x = 10 + rsignal.points.length / maxpoints * 180;
+            rpoint.y = 90 - 80 * ((rsl > -120 ? rsl : -120) + 120) / 120;
+            rsignal.points.appendItem(rpoint);
+            {% } %}
+            oscillator.frequency.value = (s - sf) * htmx.find("#wifi-chart input[name=pitch]").value;
+            gain.gain.value = htmx.find("#wifi-chart input[name=volume]").value;
+        }, 1000);
+        htmx.on("#wifi-chart select[name=sound]", "change", e => {
+            if (e.target.value === "on") {
+                oscillator.start();
+            }
+            else {
+                oscillator.stop();
+                resetAudio();
+            }
+        });
+        htmx.on("#dialog-done", "click", _ => oscillator.stop());
+    })();
+    </script>
+</div>

@@ -1,0 +1,409 @@
+body.mobile
+{
+    overflow-x: hidden;
+    overflow-y: scroll;
+}
+#m-all
+{
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    background-color: var(--body-bg-color);
+}
+#m-title
+{
+    position: fixed;
+    display: flex;
+    top: 0;
+    height: 80px;
+    width: 100%;
+    z-index: 2;
+    background-color: var(--nav-bg-color);
+    transition: top 0.4s;
+}
+#m-title #icon-logo
+{
+    position: relative;
+    top: 10px;
+}
+#m-title::has(#changes div) .nav-node-name
+{
+    display: none;
+}
+body.mobile #changes > div
+{
+    margin-top: 8px;
+    width: 250px;
+    font-size: 0;
+}
+body.mobile #changes button
+{
+    font-size: 18px;
+}
+body.mobile hr
+{
+    margin: 8px 5px 8px 0;
+}
+#m-main
+{
+    flex: 1;
+    height: 100%;
+}
+#m-nav
+{
+    position: fixed;
+    display: flex;
+    bottom: 0;
+    width: 100%;
+    height: 80px;
+    min-height: 80px;
+    z-index: 2;
+    background-color: var(--nav-bg-color);
+    overflow: hidden;
+    transition: bottom 0.4s;
+}
+body.hide-bars #m-title:not(:has(#changes div))
+{
+    top: -80px;
+}
+body.hide-bars #m-nav
+{
+    bottom: -80px;
+}
+#m-main #main-container
+{
+    overflow: hidden;
+    padding: 80px 0 100px 5px;
+    flex-direction: column;
+}
+#m-main #general
+{
+    padding-left: 0px;
+}
+#m-main #messages
+{
+    margin: 10px 10px 0 10px;
+}
+#m-main #location .location-image
+{
+    width: 100%;
+}
+#m-main #location .location-image iframe
+{
+    width: 95%;
+}
+#m-main #local-and-neighbor-devices .stats
+{
+    min-width: 0px;
+    flex: 1;
+    padding-right: 8px;
+}
+#m-main #local-and-neighbor-devices .section
+{
+    font-size: 18px;
+}
+#m-main #local-and-neighbor-devices .section .h,
+#m-main #local-and-neighbor-devices .section .heading:not(.stats)
+{
+    flex: 3;
+}
+#m-main #dhcp .t
+{
+   font-size: 12px;
+}
+#m-main #dhcp .ts
+{
+   font-size: 10px;
+}
+
+#m-nav > div
+{
+    flex: 1;
+}
+#m-nav .icon,
+#m-nav #login-icon .icon,
+#m-nav #logout-icon .icon
+{
+    height: 80px;
+    min-height: 80px;
+    width: 42px;
+    min-width: 42px;
+    margin: 0 auto;
+    filter: var(--nav-icon-filter);
+    background-position: center center;
+    background-repeat: no-repeat;
+}
+#m-nav .icon.true
+{
+    filter: var(--nav-icon-filter-select);
+}
+#m-nav #tools .menu .icon
+{
+    min-height: 0;
+}
+#m-nav #login-icon,
+#m-nav #logout-icon
+{
+    width: 100px;
+}
+#m-nav #login-icon .menu
+{
+    margin-left: -15px;
+}
+#m-nav #logout-icon .menu
+{
+    margin-left: -30px;
+}
+#m-nav #login-icon .menu,
+#m-nav #logout-icon .menu
+{
+    position: fixed;
+    top: auto;
+    bottom: 80px;
+    right: auto;
+    border-bottom-left-radius: 0;
+    border-top: none;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+#m-nav #tools .menu
+{
+    position: fixed;
+    bottom: 80px;
+    left: auto;
+    margin-left: -30px;
+    border-left: none;
+    border-bottom-left-radius: 0;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+#m-all #login
+{
+    min-width: 50%;
+    padding: 50px 10px;
+}
+#m-all #login input
+{
+    width: 100px;
+    font-size: inherit;
+}
+#m-all #tools label
+{
+    position: relative;
+    left: auto;
+}
+#m-all #tools label .icon
+{
+    bottom: -14px;
+}
+#m-all #tools:hover label .icon.tools
+{
+    filter: var(--icon-filter);;
+}
+
+body.mobile #ctrl-modal[open]
+{
+    height: 100%;
+    max-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 10px;
+    border-radius: 0;
+}
+body.mobile #ctrl-modal > .dialog
+{
+    width: 100%;
+    min-width: 100%;
+    overflow-x: hidden;
+}
+body.mobile #ctrl-modal .dialog > div:nth-child(2)
+{
+    padding: 0 10px 0 0;
+}
+
+body.mobile #ctrl-modal .ctrl-modal-footer button
+{
+    height: 30px;
+    font-size: 20px;
+}
+
+body.mobile #firmware-update-inner
+{
+    margin: 0;
+    padding: 0;
+}
+body.mobile #download-firmware,
+body.mobile #upload-firmware,
+body.mobile #sideload-firmware,
+body.mobile #restore-config,
+body.mobile #firmware-url,
+body.mobile #download-package,
+body.mobile #upload-package,
+body.mobile #remove-package,
+body.mobile #package-url,
+body.mobile #map-url
+{
+    width: 100%;
+}
+body.mobile div:has(>#download-firmware),
+body.mobile div:has(>#upload-firmware),
+body.mobile div:has(>#sideload-firmware),
+body.mobile div:has(>#restore-config),
+body.mobile div:has(>#firmware-url),
+body.mobile div:has(>#download-package),
+body.mobile div:has(>#upload-package),
+body.mobile div:has(>#remove-package),
+body.mobile div:has(>#package-url),
+body.mobile div:has(>#map-url)
+{
+    flex: 1 !important;
+}
+body.mobile #ctrl-modal #firmware-refresh button.icon.refresh,
+body.mobile #ctrl-modal #package-refresh button.icon.refresh
+{
+    left: -3px;
+}
+
+body.mobile #ctrl-modal #dhcp-reservations input,
+body.mobile #ctrl-modal #dhcp-reservations select,
+body.mobile #ctrl-modal .dhcp-options input,
+body.mobile #ctrl-modal .dhcp-options select,
+body.mobile #ctrl-modal .dhcp-tags input,
+body.mobile #ctrl-modal .dhcp-tags select
+{
+    font-size: 10px;
+}
+body.mobile #ctrl-modal .reservation input[type=text]:first-child,
+body.mobile #ctrl-modal .reservation-label div:first-child div:first-child,
+body.mobile #ctrl-modal .reservation select:nth-child(2),
+body.mobile #ctrl-modal .reservation-label div:first-child div:nth-child(2),
+body.mobile #ctrl-modal .reservation input:nth-child(3),
+body.mobile #ctrl-modal .reservation-label div:first-child div:nth-child(3),
+body.mobile #ctrl-modal .lease input:first-child,
+body.mobile #ctrl-modal .lease-label div:first-child div:first-child,
+body.mobile #ctrl-modal .lease input:nth-child(2),
+body.mobile #ctrl-modal .lease-label div:first-child div:nth-child(2),
+body.mobile #ctrl-modal .lease input:nth-child(3),
+body.mobile #ctrl-modal .lease-label div:first-child div:nth-child(3),
+body.mobile #ctrl-modal .dhcp-options .adr > div > :nth-child(2),
+body.mobile #ctrl-modal .dhcp-tags .adr > div > :nth-child(2),
+body.mobile #ctrl-modal .dhcp-options .adr > div > :nth-child(3),
+body.mobile #ctrl-modal .dhcp-tags .adr > div > :nth-child(3)
+{
+    width: 90px;
+    font-size: 10px;
+}
+
+body.mobile #ctrl-modal #local-services .service input[type=text],
+body.mobile #ctrl-modal #local-services .service select,
+body.mobile #ctrl-modal #local-services .service .cols:last-child input[type=text],
+body.mobile #ctrl-modal #local-services .service .cols:last-child select
+{
+    font-size: 10px;
+}
+body.mobile #ctrl-modal #local-services .service .cols:last-child select
+{
+    width: 120px;
+}
+body.mobile #ctrl-modal .ports
+{
+    font-size: 10px;
+}
+body.mobile #ctrl-modal #port-forwards select[name=port_src],
+body.mobile #ctrl-modal #port-forwards select[name=port_dst],
+body.mobile #ctrl-modal .port-forwards-label div:nth-child(1)
+{
+    width: 90px;
+    min-width: 90px;
+}
+body.mobile #ctrl-modal #port-forwards input[name=port_sports],
+body.mobile #ctrl-modal #port-forwards input[name=port_dport],
+body.mobile #ctrl-modal .port-forwards-label div:nth-child(2)
+{
+    width: 70px;
+    min-width: 70px;
+}
+
+body.mobile #ctrl-modal .xlink-label div:first-child div:first-child,
+body.mobile #ctrl-modal .xlink-label div:first-child div:nth-child(6),
+body.mobile #ctrl-modal .xlink input:first-child,
+body.mobile #ctrl-modal .xlink select:first-child,
+body.mobile #ctrl-modal .xlink select[name=port]
+{
+    width: 45px;
+    flex-grow: 1;
+}
+body.mobile #ctrl-modal .xlink-label div:first-child div:nth-child(2),
+body.mobile #ctrl-modal .xlink-label div:first-child div:nth-child(3),
+body.mobile #ctrl-modal .xlink input:nth-child(2),
+body.mobile #ctrl-modal .xlink input:nth-child(3)
+{
+    width: 70px;
+    flex-grow: 1;
+}
+
+body.mobile #meshpage
+{
+    margin-top: -80px;
+    padding: 5px 5px;
+}
+body.mobile #meshpage .block
+{
+    padding: 30px 0 10px 0;
+}
+body.mobile #meshpage .node
+{
+    width: 100%;
+    padding: 2px 10px;
+}
+body.mobile #meshfilter input
+{
+    width: 200px;
+}
+body.mobile .meshpage-help
+{
+    padding: 20px 20px 0 20px;
+}
+
+body.mobile .reboot
+{
+    padding: 10px;
+    flex-wrap: wrap;
+}
+body.mobile .reboot > div:first-child
+{
+    scale: 0.8;
+    margin: auto auto;
+}
+body.mobile .reboot > div:nth-child(2)
+{
+    padding: 10px 0;
+}
+
+body.mobile #target-swap,
+body.mobile #target-swap-dummy
+{
+    display: none;
+}
+body.mobile #ctrl-modal .simple-tool input
+{
+    font-size: 12px;
+}
+body.mobile #ctrl-modal .tool-console pre
+{
+    overflow: scroll scroll;
+}
+body.mobile #ctrl-modal button#tool-start
+{
+    width: 50px;
+    height: 30px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+body.mobile #wifi-chart .cols:nth-child(2)
+{
+    justify-content: center;
+}

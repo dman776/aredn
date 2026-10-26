@@ -1,0 +1,75 @@
+#!/usr/bin/ucode
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024,2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+
+import * as fs from "fs";
+import * as uci from "uci";
+
+const updateHour = 13; // Run at ~1pm UTC
+const currentReleases = "/etc/current_releases";
+const firmwareList = "/tmp/firmware.list";
+
+const cursor = uci.cursor();
+
+let doVersionUpdate = false;
+const time = gmtime();
+if (time.hour == updateHour) {
+    doVersionUpdate = true;
+}
+else if (!fs.access(currentReleases)) {
+    doVersionUpdate = true;
+}
+
+if (doVersionUpdate) {
+    const configUrl = `${cursor.get("aredn", "@downloads[0]", "firmware_aredn")}/afs/www/config.js`;
+    let releaseVersion = null;
+    let nightlyVersion = null;
+    const p = fs.popen(`exec /bin/uclient-fetch -O - ${configUrl} 2> /dev/null`);
+    if (p) {
+        for (let line = p.read("line"); length(line); line = p.read("line")) {
+            let m = match(line, /versions:.*'([0-9]+\-[0-9a-f]+)':/);
+            if (m) {
+                nightlyVersion = m[1];
+            }
+            m = match(line, /default_version: "(.+)"/);
+            if (m) {
+                releaseVersion = m[1];
+            }
+        }
+        p.close();
+    }
+    if (releaseVersion && nightlyVersion) {
+        fs.writefile(currentReleases, `${releaseVersion} ${nightlyVersion}`);
+        fs.unlink(firmwareList);
+    }
+}

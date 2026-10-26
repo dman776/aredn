@@ -1,0 +1,312 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024,2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{%
+    const radio = radios.getActiveConfiguration();
+    let midx1 = -1;
+    let midx2 = -1;
+    let lidx1 = -1;
+    let lidx2 = -1;
+    let widx = -1;
+    for (let i = 0; i < length(radio); i++) {
+        switch (radio[i].mode?.mode) {
+            case radios.RADIO_MESH:
+            case radios.RADIO_MESHPTMP:
+            case radios.RADIO_MESHPTP:
+            case radios.RADIO_MESHSTA:
+                if (midx1 == -1) {
+                    midx1 = i;
+                }
+                else {
+                    midx2 = i;
+                }
+                break;
+            case radios.RADIO_LAN:
+                if (lidx1 == -1) {
+                    lidx1 = i;
+                }
+                else {
+                    lidx2 = i;
+                }
+                break;
+            case radios.RADIO_WAN:
+                widx = i;
+                break;
+        }
+    }
+%}
+{% if (length(radio)) { %}
+<div class="ctrl" hx-get="status/e/radio-and-antenna" hx-target="#ctrl-modal">
+{% } else { %}
+<div class="noctrl">
+{% } %}
+    <div class="section-title">Radio</div>
+    <div class="section">
+        <div class="t">{{hardware.getRadioName()}}</div>
+        <div class="s">model</div>
+    </div>
+    {% if (midx1 !== -1) {
+        const r = radio[midx1].mode;
+        const chs = r.mode === "meshsta" && configuration.getSettingAsList(`radio${midx1}_channels`); %}
+    <div class="section-title">{{r.mode === "mesh" ? "Mesh" : r.mode === "meshap" ? "Mesh PTMP" : r.mode === "meshptp" ? "Mesh PTP" : "Mesh Station"}}</div>
+    <div class="section">
+        <div class="cols">
+            {% if (chs) {
+                const cf = hardware.getCurrentFrequency(radio[midx1].iface);
+                const fr = cf ? (cf - r.bandwidth / 2.0) + " - " + (cf + r.bandwidth / 2.0) + " MHz" : "-";
+                const cc = cf ? hardware.getChannelFromFrequency(radio[midx1].iface, cf) : "Searching";
+            %}
+            <div>
+                <div class="t">{{cc}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div>
+                <div class="t">{{fr}}</div>
+                <div class="s">frequencies</div>
+            </div>
+            {% } else { %}
+            <div>
+                <div class="t">{{r.channel}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div>
+                <div class="t">{{hardware.getChannelFrequencyRange(radio[midx1].iface, r.channel, r.bandwidth)}}</div>
+                <div class="s">frequencies</div>
+            </div>
+            {% } %}
+            <div>
+                <div class="t">{{r.bandwidth}} MHz</div>
+                <div class="s">bandwidth</div>
+            </div>
+        </div>
+        <div class="cols">
+            <div>
+                <div class="t">{{r.txpower + radio[midx1].txpoweroffset}} dBm</div>
+                <div class="s">tx power</div>
+            </div>
+            <div style="flex:2">
+            {%
+                if (hardware.supportsFeature("max-distance", radio[midx1].iface)) {
+                    const dvalue = util.ceil(10 * units.meters2distance(hardware.getMaxDistance(radio[midx1].iface))) / 10.0;
+            %}
+                <div class="t">{{dvalue}} {{units.distanceUnit(dvalue)}}</div>
+                <div class="s">maximum distance (actual)</div>
+            {% } %}
+            </div>
+        </div>
+    </div>
+    {% }
+    if (midx2 !== -1) {
+        const r = radio[midx2].mode;
+        const chs = r.mode === "meshsta" && configuration.getSettingAsList(`radio${midx2}_channels`); %}
+    <div class="section-title">{{r.mode === "mesh" ? "Mesh" : r.mode === "meshap" ? "Mesh PTMP" : r.mode === "meshptp" ? "Mesh PTP" : "Mesh Station"}}</div>
+    <div class="section">
+        <div class="cols">
+            {% if (chs) {
+                const cf = hardware.getCurrentFrequency(radio[midx2].iface);
+                const fr = cf ? (cf - r.bandwidth / 2.0) + " - " + (cf + r.bandwidth / 2.0) + " MHz" : "-";
+                const cc = cf ? hardware.getChannelFromFrequency(radio[midx2].iface, cf) : "Searching";
+            %}
+            <div>
+                <div class="t">{{cc}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div>
+                <div class="t">{{fr}}</div>
+                <div class="s">frequencies</div>
+            </div>
+            {% } else { %}
+            <div>
+                <div class="t">{{r.channel}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div>
+                <div class="t">{{hardware.getChannelFrequencyRange(radio[midx2].iface, r.channel, r.bandwidth)}}</div>
+                <div class="s">frequencies</div>
+            </div>
+            {% } %}
+            <div>
+                <div class="t">{{r.bandwidth}} MHz</div>
+                <div class="s">bandwidth</div>
+            </div>
+        </div>
+        <div class="cols">
+            <div>
+                <div class="t">{{r.txpower + radio[midx2].txpoweroffset}} dBm</div>
+                <div class="s">tx power</div>
+            </div>
+            <div style="flex:2">
+            {%
+                if (hardware.supportsFeature("max-distance", radio[midx2].iface)) {
+                    const dvalue = util.ceil(10 * units.meters2distance(hardware.getMaxDistance(radio[midx2].iface))) / 10.0;
+            %}
+                <div class="t">{{dvalue}} {{units.distanceUnit(dvalue)}}</div>
+                <div class="s">maximum distance (actual)</div>
+            {% } %}
+            </div>
+        </div>
+    </div>
+    {% }
+    if (lidx1 !== -1) {
+        const r = radio[lidx1].mode; %}
+    <div class="section-title">LAN Hotspot</div>
+    <div class="section">
+        <div class="cols">
+            <div>
+                <div class="t">{{r.channel}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div style="flex:2">
+                <div class="t">{{r.ssid}}</div>
+                <div class="s">ssid</div>
+            </div>
+        </div>
+    </div>
+    {% }
+    if (lidx2 !== -1) {
+        const r = radio[lidx2].mode; %}
+    <div class="section-title">LAN Hotspot</div>
+    <div class="section">
+        <div class="cols">
+            <div>
+                <div class="t">{{r.channel}}</div>
+                <div class="s">channel</div>
+            </div>
+            <div style="flex:2">
+                <div class="t">{{r.ssid}}</div>
+                <div class="s">ssid</div>
+            </div>
+        </div>
+    </div>
+    {% }
+    if (widx !== -1) {
+        const r = radio[widx].mode;
+        let wconnected = false;
+        let winternet = false;
+        let f = fs.popen(`/usr/sbin/iw dev wlan${widx} link 2> /dev/null`);
+        if (f) {
+            const mssid = `SSID: ${r.ssid}`;
+            for (let l = f.read("line"); length(l); l = f.read("line")) {
+                if (index(l, mssid) !== -1) {
+                    wconnected = true;
+                }
+            }
+            f.close();
+        }
+        if (wconnected) {
+            if (system(`/bin/ping -I wlan${widx} -W 1 -c 1 1.1.1.1 > /dev/null 2>&1`, 250) === 0) {
+                winternet = true;
+            }
+        }
+    %}
+    <div class="section-title">WAN Client</div>
+    <div class="section">
+        <div class="cols">
+            <div>
+                {% if (wconnected && winternet) { %}
+                <div class="t">Internet</div>
+                {% } else if (wconnected) { %}
+                <div class="t">No Internet</div>
+                {% } else { %}
+                <div class="t">No Connection</div>
+                {% } %}
+                <div class="s">status</div>
+            </div>
+            <div style="flex:2">
+                <div class="t">{{r.ssid}}</div>
+                <div class="s">ssid</div>
+            </div>
+        </div>
+    </div>
+    {% } %}
+{% if (midx1 !== -1) { %}
+    <div class="section-title">Antenna</div>
+    <div class="section">
+        {%
+            const antenna = hardware.getAntennaInfo(radio[midx1].iface, uci.get("aredn", "@location[0]", "antenna"));
+            const antennaAux = hardware.getAntennaAuxInfo(radio[midx1].iface, uci.get("aredn", "@location[0]", "antenna_aux"));
+            const antennaPol = hardware.getAntennaPolarization(radio[midx1].iface);
+            if (antennaPol) {
+        %}
+        <div class="cols">
+            <div style="flex:2">
+                <div class="t">{{(antenna || { description: "-"}).description}}</div>
+                <div class="s">antenna</div>
+            </div>
+            <div>
+                <div class="t" style="text-transform: capitalize">{{antennaPol}}</div>
+                <div class="s">polarization</div>
+            </div>
+        </div>
+        {%
+            }
+            else {
+        %}
+        <div class="t">{{(antenna || { description: "-"}).description}}</div>
+        <div class="s">antenna</div>
+        {%
+            }
+            if (antennaAux) { %}
+        <div class="t">{{(antennaAux || { description: "-"}).description}}</div>
+        <div class="s">aux antenna</div>
+        {% } %}
+        <div class="cols">
+            <div>
+                {% if (uci.get("aredn", "@location[0]", "azimuth")) { %}
+                <div class="t">{{uci.get("aredn", "@location[0]", "azimuth")}}&deg;</div>
+                {% } else { %}
+                <div class="t">-</div>
+                {% } %}
+                <div class="s">azimuth</div>
+            </div>
+            <div>
+                {% if (uci.get("aredn", "@location[0]", "height")) { %}
+                <div class="t">{{uci.get("aredn", "@location[0]", "height")}}m</div>
+                {% } else { %}
+                <div class="t">-</div>
+                {% } %}
+                <div class="s">height</div>
+            </div>
+            <div>
+                {% if (uci.get("aredn", "@location[0]", "elevation")) { %}
+                <div class="t">{{uci.get("aredn", "@location[0]", "elevation")}}&deg;</div>
+                {% } else { %}
+                <div class="t">-</div>
+                {% } %}
+                <div class="s">elevation</div>
+            </div>
+        </div>
+    </div>
+{% } %}
+</div>

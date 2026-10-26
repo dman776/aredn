@@ -1,0 +1,443 @@
+{%
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024-2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+%}
+{% if (request.env.REQUEST_METHOD === "PUT") {
+    configuration.prepareChanges();
+    const userb = split(uciMesh.get("aredn", "@lqm[0]", "user_blocks"), ",");
+    const blockedmacs = {};
+    for (let i = 0; i < length(userb); i++) {
+        blockedmacs[uc(userb[i])] = true;
+    }
+    for (let mac in request.args) {
+        if (request.args[mac] === "user") {
+            blockedmacs[uc(mac)] = true;
+        }
+        else {
+            delete blockedmacs[uc(mac)];
+        }
+    }
+    uciMesh.set("aredn", "@lqm[0]", "user_blocks", join(",", keys(blockedmacs)));
+    uciMesh.commit("aredn");
+    print(_R("changes"));
+    return;
+}
+if (request.env.REQUEST_METHOD === "DELETE") {
+    configuration.revertModalChanges();
+    print(_R("changes"));
+    return;
+}
+const selected = substr(request.env.QUERY_STRING, 2);
+const blockedmacs = {};
+const user = split(uciMesh.get("aredn", "@lqm[0]", "user_blocks"), ",");
+for (let i = 0; i < length(user); i++) {
+    blockedmacs[uc(user[i])] = true;
+}
+const lqmInfo = lqm.get();
+const tracker = lqmInfo.trackers[selected];
+let neighbor = null;
+if (tracker) {
+    if (blockedmacs[uc(tracker.mac)]) {
+        tracker.user_blocks = true;
+    }
+    neighbor = { name: tracker.hostname || `|${tracker.ip}`, n: tracker, l: null };
+}
+const showblock = auth.isAdmin && neighbor?.n?.type == "RF";
+const band = hardware.getRadioCount() > 1 ? tracker?.band : null;
+%}
+<div class="dialog">
+    {% if (tracker && tracker.type === "DtD" && tracker.distance < 100) { %}
+    {{_R("dialog-header", "Local Node")}}
+    {% } else { %}
+    {{_R("dialog-header", "Neighborhood Node")}}
+    {% } %}
+    <div>
+        {% if (showblock) { %}
+        {{_H("Provides more detailed information about the state of a link from this node to another. The current blocked
+        state is show in the top/right corner. This can be changed to <b>user block</b> to stop this node connecting.")}}
+        {% } else { %}
+        {{_H("Provides more detailed information about the state of a link from this node to another.")}}
+        {% } %}
+        {%
+        function state(n)
+        {
+            if (n.lastseen + 120 < lqmInfo.now) {
+                return "disconnected";
+            }
+            if (n.user_blocks) {
+                return "blocked by user";
+            }
+            if (n.routable && n.route_count > 0 && n.metric != -1) {
+                return "routing";
+            }
+            return "idle";
+        }
+        const map_url = uci.get("aredn", "@location[0]", "map");
+        function map(n, v)
+        {
+            if (map_url && n.lat && n.lon) {
+                return `<a href="${replace(replace(map_url, "(lat)", n.lat), "(lon)", n.lon)}" target="_blank">${v}</a>`;
+            }
+            return v;
+        }
+        function lastseen(n)
+        {
+            const s = lqmInfo.now - (n.lastseen + 120);
+            if (s <= 0) {
+                return "now";
+            }
+            const m = int(s / 60);
+            const h = int(m / 60);
+            if (h > 0) {
+                return `${h} ${h == 1 ? "hour" : "hours"} ago`;
+            }
+            if (m > 0) {
+                return `${m} ${m == 1 ? "minute" : "minutes"} ago`;
+            }
+            return "now";
+        }
+        function uptime(n)
+        {
+            const s = n.connected_time ? n.connected_time : n.lastseen - n.lastup;
+            if (s > 0) {
+                const m = int(s / 60);
+                const h = int(m / 60);
+                const d = int(h / 24);
+                if (d > 1) {
+                    const dh = h % 24;
+                    return `${d} days${dh == 0 ? "" : dh == 1 ? ", 1 hour" : (", " + dh + " hours")}`;
+                }
+                if (h > 0) {
+                    return `${h} ${h == 1 ? "hour" : "hours"}`;
+                }
+                if (m > 0) {
+                    return `${m} ${m == 1 ? "minute" : "minutes"}`;
+                }
+            }
+            return "0 minutes";
+        }
+        if (neighbor) {
+            const n = neighbor.n;
+        %}
+        <div class="neighbor">
+            <div class="o">
+                {% if (n.hostname || n.ip) { %}
+                <div><a href="{{n.hostname ? `http://${n.hostname}.local.mesh` : n.ip}}" target="_blank">{{n.hostname || n.ip}}</a></div>
+                {% } else { %}
+                <div>{{n.mac}}</div>
+                {% } %}
+                {% if (showblock) { %}
+                <select name="{{n.mac}}" hx-put={{request.env.REQUEST_URI}} hx-swap="none">
+                    <option value="available" {{n.user_blocks ? "" : "selected"}}>unblocked</option>
+                    <option value="user" {{n.user_blocks ? "selected" : ""}}>user block</option>
+                </select>
+                {% } %}
+            </div>
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.type}}{{n.remoterf ? "+RF" : ""}}{{band ? ` (${band})`: ""}}</div>
+                    <div>type</div>
+                </div>
+                <div class="i">
+                    <div>{{n.mac}}</div>
+                    <div>mac address</div>
+                </div>
+                <div class="i">
+                    <div>{% if (n.ip && !match(n.ip, /^169\.254\./)) { %}
+                    <a href="http://{{n.ip}}/">{{n.ip}}</a>
+                    {% } else if (n.canonical_ip) { %}
+                    <a href="http://{{n.canonical_ip}}/">{{n.canonical_ip}}</a>
+                    {% } else { %}
+                    -
+                    {% } %}</div>
+                    <div>ip address</div>
+                </div>
+            </div>
+            {% if (n.model && n.firmware_version) { %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.model}}</div>
+                    <div>model</div>
+                </div>
+                <div class="i">
+                    <div>{{n.firmware_version}}</div>
+                    <div>firmware</div>
+                </div>
+                <div class="i">
+                    <div style="word-break:break-all">{{n.ipv6ll}}</div>
+                    <div>link address</div>
+                </div>
+            </div>
+            {% } %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{"lat" in n ? map(n, sprintf("%.4f", n.lat)) : "-"}}</div>
+                    <div>latitude</div>
+                </div>
+                <div class="i">
+                    <div>{{"lon" in n ? map(n, sprintf("%.4f", n.lon)) : "-"}}</div>
+                    <div>longitude</div>
+                </div>
+                <div class="i">
+                    <div>{{"distance" in n ? map(n, sprintf("%.1f %s", units.meters2distance(n.distance), units.distanceUnit())) : "-"}}</div>
+                    <div>distance</div>
+                </div>
+            </div>
+            {% if (n.lq & n.rev_lq) { %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.lq}}%</div>
+                    <div>rx success</div>
+                </div>
+                <div class="i">
+                    <div>{{n.rev_lq}}%</div>
+                    <div>tx success</div>
+                </div>
+                <div class="i">
+                    <div>{{n.device}}</div>
+                    <div>device</div>
+                </div>
+            </div>
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.rxcost}}</div>
+                    <div>rx cost</div>
+                </div>
+                <div class="i">
+                    <div>{{n.txcost}}</div>
+                    <div>tx cost</div>
+                </div>
+                <div></div>
+            </div>
+            {% } else if (n.lq) { %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.lq}}%</div>
+                    <div>rx success</div>
+                </div>
+                <div class="i">
+                    <div>{{n.rxcost}}</div>
+                    <div>rx cost</div>
+                </div>
+                <div class="i">
+                    <div>{{n.txcost}}</div>
+                    <div>tx cost</div>
+                </div>
+            </div>
+            {% } %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{type(n.ping_success_time) ? sprintf("%.1f ms", n.ping_success_time * 1000) : "-"}}</div>
+                    <div>ping time</div>
+                </div>
+                <div class="i">
+                    <div>{{type(n.ping_quality) ? sprintf("%d%%", n.ping_quality) : "-"}}</div>
+                    <div>ping success</div>
+                </div>
+                <div class="i">
+                    <div>{{type(n.avg_tx_packets) ? sprintf("%.1f pkt/sec", n.avg_tx_packets / 30) : "-"}}</div>
+                    <div>avg tx</div>
+                </div>
+            </div>
+            <div class="cols">
+                <div class="i">
+                    <div>{{type(n.rev_ping_success_time) ? sprintf("%.1f ms", n.rev_ping_success_time * 1000) : "-"}}</div>
+                    <div>neighbor ping time</div>
+                </div>
+                <div class="i">
+                    <div>{{type(n.rev_ping_quality) ? sprintf("%d%%", n.rev_ping_quality) : "-"}}</div>
+                    <div>neighbor ping success</div>
+                </div>
+                <div class="i">
+                    <div>{{type(n.rev_quality) ? sprintf("%d%%", 100 - n.rev_quality) : "-"}}</div>
+                    <div>neighbor errors</div>
+                </div>
+            </div>
+            {% if (n.type == "RF") { %}
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.snr}}</div>
+                    <div>local snr</div>
+                </div>
+                <div class="i">
+                    <div>{{n.rev_snr || "-"}}</div>
+                    <div>neighbor snr</div>
+                </div>
+                <div class="i">
+                    <div>{{n.avg_tx_packets ? sprintf("%.1f%%", 100 * (n.avg_tx_fail || 0) / n.avg_tx_packets) : "-"}}</div>
+                    <div>tx failures</div>
+                </div>
+            </div>
+            <div class="cols">
+                <div class="i">
+                    <div>{{n.rx_bitrate ? sprintf("%.1f Mbps", n.rx_bitrate) : "-"}}</div>
+                    <div>physical rx bitrate</div>
+                </div>
+                <div class="i">
+                    <div>{{n.tx_bitrate ? sprintf("%.1f Mbps", n.tx_bitrate) : "-"}}</div>
+                    <div>physical tx bitrate</div>
+                </div>
+                <div class="i">
+                    <div>{{n.avg_tx_packets ? sprintf("%.1f%%", 100 * (n.avg_tx_retries || 0) / n.avg_tx_packets) : "-"}}</div>
+                    <div>tx retransmissions</div>
+                </div>
+            </div>
+            {% } %}
+            <div class="cols">
+                {% if (n.type != "DtD") { %}
+                <div class="i">
+                    <div>{{type(n.rtt) ? sprintf("%.1f ms", n.rtt) : "-"}}</div>
+                    <div>round trip time</div>
+                </div>
+                {% } %}
+                <div class="i">
+                    {% if (n.type != "RF" && n.avg_tx_packets) { %}
+                    <div>{{sprintf("%.1f%%", 100 * (n.avg_tx_fail || 0) / n.avg_tx_packets)}}</div>
+                    <div>tx failures</div>
+                    {% } %}
+                </div>
+                <div></div>
+            </div>
+            <div class="cols">
+                <div class="i">
+                    <div>{{state(n)}}</div>
+                    <div>state</div>
+                </div>
+                <div class="i">
+                    <div>{{n.route_count}}</div>
+                    <div>routes</div>
+                </div>
+                <div class="i">
+                    <div>{{n.route_count === 0 ? "-" : n.metric ?? "-"}}</div>
+                    <div>metric</div>
+                </div>
+            </div>
+            <div class="cols">
+                {% const seen = lastseen(n); %}
+                <div class="i">
+                    <div>{{seen}}</div>
+                    <div>last seen</div>
+                </div>
+                <div class="i">
+                    <div>{{uptime(n)}}</div>
+                    <div>{{seen != "now" ? "previous uptime" : "link uptime"}}</div>
+                </div>
+                <div></div>
+            </div>
+            {%
+            const snr = `/tmp/snrlog/${selected}`;
+            if (fs.access(snr)) {
+                let signal = "<polyline class='signal' points='";
+                let noise = "<polyline class='noise' points='";
+                let hints = "";
+                const f = fs.open(snr);
+                if (f) {
+                    const s = [];
+                    const re = /^([^,]+),([-0-9]+),([-0-9]+),([-0-9]+),([-0-9\.]+),([-0-9]+),([-0-9\.]+)$/;
+                    for (let l = f.read("line"); length(l); l = f.read("line")) {
+                        const m = match(trim(l), re);
+                        if (m) {
+                            push(s, m);
+                        }
+                    }
+                    if (length(s) > 90) {
+                        const l = length(s);
+                        const c = l / 90;
+                        for (let i = 0; i < 90; i++) {
+                            s[i] = s[int(i * c)];
+                        }
+                        splice(s, 90);
+                    }
+                    const slength = length(s);
+                    const slength2 = slength * 0.75;
+                    const step = 180.0 / slength;
+                    let o = 10.0;
+                    let i;
+                    for (i = 0; i < slength2; i++) {
+                        signal += `${o},${10.0 + (s[i][2] / -120.0 * 80.0)} `;
+                        noise += `${o},${10.0 + (s[i][3] / -120.0 * 80.0)} `;
+                        const hx = o + 4;
+                        hints += `<g><rect width="${step}" height="85" x="${o - step / 2}" y="5"></rect><text y="10"><tspan x="${hx}">${s[i][1]}</tspan><tspan x="${hx}" dy="6px">Signal: ${s[i][2]} dBm</tspan><tspan x="${hx}" dy="6px">Noise: ${s[i][3]} dBm</tspan></text></g>`;
+                        o += step;
+                    }
+                    for (; i < slength; i++) {
+                        signal += `${o},${10.0 + (s[i][2] / -120.0 * 80.0)} `;
+                        noise += `${o},${10.0 + (s[i][3] / -120.0 * 80.0)} `;
+                        const hx = o + 4;
+                        const hx2 = o - 4;
+                        hints += `<g class="r"><rect width="${step}" height="85" x="${o - step / 2}" y="5"></rect><text y="10"><tspan x="${hx2}">${s[i][1]}</tspan><tspan x="${hx2}" dy="6px">Signal: ${s[i][2]} dBm</tspan><tspan x="${hx2}" dy="6px">Noise: ${s[i][3]} dBm</tspan></text></g>`;
+                        o += step;
+                    }
+                    f.close();
+                }
+                signal += "' />";
+                noise += "' />";
+            %}
+            <div id="neighbor-device-chart">
+                <svg viewBox="0 0 200 100" preserveAspectRatio="meet">
+                    <g class="frame">
+                        <polyline points="10,10 10,90 190,90" />
+                        <text x="9" y="4">dBm</text>
+                        <text x="8" y="10">0</text>
+                        <text x="8" y="23">-20</text>
+                        <text x="8" y="37">-40</text>
+                        <text x="8" y="50">-60</text>
+                        <text x="8" y="63">-80</text>
+                        <text x="8" y="77">-100</text>
+                        <text x="8" y="90">-120</text>
+                    </g>
+                    <g class="data">{{signal}}{{noise}}</g>
+                    <g class="hints">{{hints}}</g>
+                </svg>
+            </div>
+            {% } %}
+            {% if (map_url && n.lat && n.lon) {
+                const mapurl = replace(replace(map_url, "(lat)", n.lat), "(lon)", n.lon);
+            %}
+            <div class="location-image"><a href="{{mapurl}}" target="_blank"><iframe loading="lazy" src="{{mapurl}}"></iframe><div class="overlay"></div></a></div>
+            <script>
+                (function(){
+                    fetch("{{mapurl}}").catch(_ => document.querySelector(".dialog .location-image").style.display = "none");
+                })();
+            </script>
+            {% } %}
+        </div>
+        {% } %}
+    </div>
+    {{_R("dialog-footer", showblock ? "" : "nocancel")}}
+    <script>
+    (function(){
+    {{_R("open")}}
+    })();
+    </script>
+</div>

@@ -1,0 +1,292 @@
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024,2025 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+
+import * as fs from "fs";
+import * as hardware from "aredn.hardware";
+import * as configuration from "aredn.configuration";
+import * as uci from "uci";
+
+export const RADIO_OFF = "off";
+export const RADIO_MESH = "mesh";
+export const RADIO_MESHPTMP = "meshap";
+export const RADIO_MESHPTP = "meshptp";
+export const RADIO_MESHSTA = "meshsta";
+export const RADIO_LAN = "lan";
+export const RADIO_WAN = "wan";
+
+let radioCache = null;
+
+export function getCommonConfiguration()
+{
+    if (radioCache) {
+        return json(radioCache);
+    }
+    const radio = [];
+    const nrradios = hardware.getRadioCount();
+    for (let i = 0; i < nrradios; i++) {
+        const iface = `wlan${i}`;
+        if (hardware.getRadioIntf(iface).disabled) {
+            push(radio, { disabled: true });
+        }
+        else {
+            const r = {
+                iface: iface,
+                mode: null,
+                ant: null,
+                antaux: null,
+                def: hardware.getDefaultChannel(iface),
+                bws: hardware.getRfBandwidths(iface),
+                channels: {},
+                ants: hardware.getAntennas(iface),
+                antsaux: hardware.getAntennasAux(iface),
+                txpoweroffset: hardware.getTxPowerOffset(iface),
+                txmaxpower: hardware.getMaxTxPower(iface),
+                macaddress: hardware.getInterfaceMAC(iface),
+                maxdistance: 80550,
+                managedOOB: [ -4, -3, -2, -1, 0 ]
+            };
+            // Calculate which channels are available at which bandwidths
+            const channels = hardware.getRfChannels(iface);
+            for (let b = 0; b < length(r.bws); b++) {
+                const bw = r.bws[b];
+                const c = [];
+                r.channels[`${bw}`] = c;
+                for (let j = 0; j < length(channels); j++) {
+                    const ch = channels[j];
+                    if (index(ch.widths, bw) !== -1) {
+                        push(c, ch);
+                    }
+                }
+            }
+            push(radio, r);
+        }
+    }
+    radioCache = sprintf("%J", radio);
+    return radio;
+};
+
+export function getActiveConfiguration()
+{
+    const cursor = uci.cursor();
+    const radio = getCommonConfiguration();
+    const nrradios = length(radio);
+    if (nrradios > 0) {
+        let mdevice1;
+        let mdevice2;
+        let ldevice1;
+        let ldevice2;
+        let wdevice;
+
+        for (let i = 0; i < nrradios; i++) {
+            radio[i].mode = { mode: RADIO_OFF };
+        }
+
+        const mmode1 = {
+            mode: RADIO_MESH,
+            channel: 0,
+            bandwidth: 10,
+            ssid: "-"
+        };
+        const mmode2 = {
+            mode: RADIO_MESH,
+            channel: 0,
+            bandwidth: 10,
+            ssid: "-"
+        };
+        const lmode1 = {
+            mode: RADIO_LAN,
+            channel: 0,
+            ssid: "-"
+        };
+        const lmode2 = {
+            mode: RADIO_LAN,
+            channel: 0,
+            ssid: "-"
+        };
+        const wmode = {
+            mode: RADIO_WAN,
+            ssid: "-"
+        };
+
+        cursor.foreach("wireless", "wifi-iface", function(s)
+        {
+            if (substr(s.network, 0, 4) === "wifi" && (s.mode == "ap" || s.mode == "sta" || s.mode == "adhoc")) {
+                if (!mdevice1) {
+                    mdevice1 = s.device;
+                    mmode1.ssid = s.ssid;
+                    switch (s.mode) {
+                    case "ap":
+                        mmode1.mode = s.macfilter === "allow" ? RADIO_MESHPTP : RADIO_MESHPTMP;
+                        break;
+                    case "sta":
+                        mmode1.mode = RADIO_MESHSTA;
+                        break;
+                    case "adhoc":
+                        mmode1.mode = RADIO_MESH;
+                        break;
+                    }
+                }
+                else {
+                    mdevice2 = s.device;
+                    mmode2.ssid = s.ssid;
+                    switch (s.mode) {
+                    case "ap":
+                        mmode2.mode = s.macfilter === "allow" ? RADIO_MESHPTP : RADIO_MESHPTMP;
+                        break;
+                    case "sta":
+                        mmode2.mode = RADIO_MESHSTA;
+                        break;
+                    case "adhoc":
+                        mmode2.mode = RADIO_MESH;
+                        break;
+                    }
+                }
+            }
+            if (s.network === "lan" && s.mode === "ap") {
+                if (!ldevice1) {
+                    ldevice1 = s.device;
+                    lmode1.ssid = s.ssid;
+                }
+                else {
+                    ldevice2 = s.device;
+                    lmode2.ssid = s.ssid;
+                }
+            }
+            if (s.network === "wan" && s.mode === "sta") {
+                wdevice = s.device;
+                wmode.ssid = s.ssid;
+            }
+        });
+        cursor.foreach("wireless", "wifi-device", function(s)
+        {
+            if (s[".name"] === mdevice1) {
+                mmode1.channel = int(s.channel);
+                mmode1.bandwidth = int(s.chanbw);
+                mmode1.txpower = int(s.txpower);
+            }
+            if (s[".name"] === mdevice2) {
+                mmode2.channel = int(s.channel);
+                mmode2.bandwidth = int(s.chanbw);
+                mmode2.txpower = int(s.txpower);
+            }
+            if (s[".name"] === ldevice1) {
+                lmode1.channel = int(s.channel);
+            }
+            if (s[".name"] === ldevice2) {
+                lmode2.channel = int(s.channel);
+            }
+        });
+
+        if (mdevice1) {
+            const idx = int(substr(mdevice1, 5));
+            radio[idx].mode = mmode1;
+        }
+        if (mdevice2) {
+            const idx = int(substr(mdevice2, 5));
+            radio[idx].mode = mmode2;
+        }
+        if (ldevice1) {
+            const idx = int(substr(ldevice1, 5));
+            radio[idx].mode = lmode1;
+        }
+        if (ldevice2) {
+            const idx = int(substr(ldevice2, 5));
+            radio[idx].mode = lmode2;
+        }
+        if (wdevice) {
+            const idx = int(substr(wdevice, 5));
+            radio[idx].mode = wmode;
+        }
+    }
+    return radio;
+};
+
+export function getConfiguration()
+{
+    const cursor = uci.cursor("/etc/config.mesh");
+    const radio = getCommonConfiguration();
+    const nrradios = length(radio);
+    if (nrradios >= 1) {
+        const mode = configuration.getSettingAsString("radio0_mode");
+        radio[0].mode = {
+            mode: mode,
+            channel: configuration.getSettingAsInt("radio0_channel"),
+            channels: configuration.getSettingAsList("radio0_channels"),
+            bandwidth: configuration.getSettingAsInt("radio0_bandwidth"),
+            ssid: configuration.getSettingAsString("radio0_ssid"),
+            txpower: configuration.getSettingAsInt("radio0_txpower"),
+            key: configuration.getSettingAsString("radio0_key"),
+            encryption: configuration.getSettingAsString("radio0_encryption"),
+            distance: configuration.getSettingAsString("radio0_distance")
+        };
+        radio[0].ant = hardware.getAntennaInfo(radio[0].iface, cursor.get("aredn", "@location[0]", "antenna"));
+        radio[0].antaux = hardware.getAntennaAuxInfo(radio[0].iface, cursor.get("aredn", "@location[0]", "antenna_aux"));
+    }
+    if (nrradios >= 2) {
+        const mode = configuration.getSettingAsString("radio1_mode");
+        radio[1].mode = {
+            mode: mode,
+            channel: configuration.getSettingAsInt("radio1_channel"),
+            channels: configuration.getSettingAsList("radio1_channels"),
+            bandwidth: configuration.getSettingAsInt("radio1_bandwidth"),
+            ssid: configuration.getSettingAsString("radio1_ssid"),
+            txpower: configuration.getSettingAsInt("radio1_txpower"),
+            key: configuration.getSettingAsString("radio1_key"),
+            encryption: configuration.getSettingAsString("radio1_encryption"),
+            distance: configuration.getSettingAsString("radio1_distance")
+        };
+    }
+    return radio;
+};
+
+export function getMeshRadios()
+{
+    const config = getActiveConfiguration();
+    const radios = [];
+    for (let i = 0; i < length(config); i++) {
+        switch (config[i].mode.mode) {
+            case RADIO_MESH:
+                push(radios, { mode: config[i].mode.mode, iface: config[i].iface, main: config[i].iface });
+                break;
+            case RADIO_MESHPTP:
+            case RADIO_MESHPTMP:
+            case RADIO_MESHSTA:
+                const bridge = fs.basename(fs.readlink(`/sys/class/net/${config[i].iface}/master`));
+                push(radios, { mode: config[i].mode.mode, iface: config[i].iface, main: bridge });
+                break;
+            default:
+                break;
+        }
+    }
+    return radios;
+};

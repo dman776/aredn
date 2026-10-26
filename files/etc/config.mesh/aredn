@@ -1,13 +1,29 @@
+
 config downloads
         option firmwarepath 'http://downloads.arednmesh.org/firmware'
 
 config poe
-		option passthrough '0'
+        option passthrough '0'
 
 config usb
-		option passthrough '1'
+        option passthrough '1'
 
 config map
-        option leafletjs 'http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js'
-        option leafletcss 'http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css'
+        option leafletjs 'http://unpkg.com/leaflet@0.7.7/dist/leaflet.js'
+        option leafletcss 'http://unpkg.com/leaflet@0.7.7/dist/leaflet.css'
         option maptiles 'http://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg'
+
+config dmz
+        option mode '3'
+
+config tunnel
+        option weight '1'
+
+config lqm
+
+config watchdog
+        option enable '0'
+
+config wireless_watchdog
+        option enable '1'
+        option daily '03:00'

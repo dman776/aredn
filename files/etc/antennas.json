@@ -1,0 +1,596 @@
+{
+    "900MHz": [
+        {
+            "model": "",
+            "description": "None"
+        },
+        {
+            "model": "unknown",
+            "description": "Unknown"
+        },
+        {
+            "model": "AM-9M13-120",
+            "description": "airMAX 900 MHz, 13 dBi, 120&deg; Sector",
+            "gain": 13,
+            "beamwidth": 120
+        },
+        {
+            "model": "AMY-9M16",
+            "description": "airMAX 900 MHz, 16 dBi 2x2 MIMO Yagi",
+            "gain": 16
+        },
+        {
+            "model": "NB-OD9",
+            "description": "airMAX NanoBridge OD9 Offset Dish, 11 dBi",
+            "gain": 11,
+            "beamwidth": 10
+        },
+        {
+            "model": "AY9G18M2-PRO",
+            "description": "Altelix 900 MHz, 18 dBi Dual Polarized Yagi",
+            "gain": 18
+        },
+        {
+            "model": "Generic-Omni",
+            "description": "Generic Omni",
+            "gain": 0,
+            "beamwidth": 360
+        }
+    ],
+    "HaLow": [
+        {
+            "model": "",
+            "description": "None"
+        },
+        {
+            "model": "unknown",
+            "description": "Unknown"
+        },
+        {
+            "model": "HL-1",
+            "description": "HaLowLink, 2.34 dBi Omni",
+            "gain": 2.34,
+            "beamwidth": 360
+        },
+        {
+            "model": "ANTSM93003004001",
+            "description": "AsiaRF, 2.5 dBi Omni",
+            "gain": 2.5,
+            "beamwidth": 360
+        },
+        {
+            "model": "A9Y10Nf",
+            "description": "Data Alliance, 10 dBi Yagi",
+            "gain": 10,
+            "beamwidth": 36
+        },
+        {
+            "model": "ANTSM82414S01001",
+            "description": "AsiaRF, 14 dBi Yagi",
+            "gain": 14,
+            "beamwidth": 31
+        },
+        {
+            "model": "ZDADJ928-17YG",
+            "description": "ZDA Telecommunications, 17 dBi Yagi",
+            "gain": 17,
+            "beamwidth": 25
+        },
+        {
+            "model": "Heltec-Omni",
+            "description": "Heltec 4 dBi Omni",
+            "gain": 4,
+            "beamwidth": 360
+        },
+        {
+            "model": "AOA-868-5ACM",
+            "description": "Alfa Network 5 dBi Omni",
+            "gain": 5,
+            "beamwidth": 360
+        },
+        {
+            "model": "RAIGEN-OMNI-8",
+            "description": "Raigen 8 dBi Omni",
+            "gain": 8,
+            "beamwidth": 360
+        },
+        {
+            "model": "ROKLAND-OMNI-5-8",
+            "description": "Rokland 5.8 dBi Omni",
+            "gain": 5.8,
+            "beamwidth": 360
+        },
+        {
+            "model": "ROKLAND-OMNI-6",
+            "description": "Rokland 6 dBi Omni",
+            "gain": 6,
+            "beamwidth": 360
+        },
+        {
+            "model": "ROKLAND-OMNI-8",
+            "description": "Rokland 8 dBi Omni",
+            "gain": 8,
+            "beamwidth": 360
+        },
+        {
+            "model": "ROKLAND-OMNI-8-5",
+            "description": "Rokland 8.5 dBi Omni",
+            "gain": 8.5,
+            "beamwidth": 360
+        },
+        {
+            "model": "ROKLAND-OMNI-10",
+            "description": "Rokland 10 dBi Omni",
+            "gain": 10,
+            "beamwidth": 360
+        },
+        {
+            "model": "Generic-Omni",
+            "description": "Generic Omni",
+            "gain": 0,
+            "beamwidth": 360
+        }
+    ],
+    "2.4GHz": [
+        {
+            "model": "",
+            "description": "None"
+        },
+        {
+            "model": "unknown",
+            "description": "Unknown"
+        },
+        {
+            "model": "RD-2G24",
+            "description": "airMAX 2.4 GHz, 24 dBi 6.6&deg; RocketDish",
+            "gain": 24,
+            "beamwidth": 6.6
+        },
+        {
+            "model": "AMO-2G10",
+            "description": "airMAX 2.4 GHz, 10 dBi Omni",
+            "gain": 10,
+            "beamwidth": 360
+        },
+        {
+            "model": "AMO-2G13",
+            "description": "airMAX 2.4 GHz, 13 dBi Omni",
+            "gain": 13,
+            "beamwidth": 360
+        },
+        {
+            "model": "AM-V2G-Ti-15",
+            "description": "airMAX Sector 2.4 GHz Titanium, 15 dBi 120&deg; Sector",
+            "gain": 15,
+            "beamwidth": 120
+        },
+        {
+            "model": "AM-V2G-Ti-16",
+            "description": "airMAX Sector 2.4 GHz Titanium, 16 dBi 90&deg; Sector",
+            "gain": 16,
+            "beamwidth": 90
+        },
+        {
+            "model": "AM-V2G-Ti-17",
+            "description": "airMAX Sector 2.4 GHz Titanium, 17 dBi 60&deg; Sector",
+            "gain": 17,
+            "beamwidth": 60
+        },
+        {
+            "model": "AM-2G15-120",
+            "description": "airMAX 2.4 GHz, 15 dBi, 120&deg; Sector",
+            "gain": 15,
+            "beamwidth": 120
+        },
+        {
+            "model": "AM-2G16-90",
+            "description": "airMAX 2.4 GHz, 16 dBi, 90&deg; Sector",
+            "gain": 16,
+            "beamwidth": 90
+        },
+        {
+            "model": "AF-2G24-S45",
+            "description": "airFiber X 2.4 GHz, 24 dBi 6.6&deg;, Slant 45 Dish",
+            "gain": 24,
+            "beamwidth": 6.6
+        },
+        {
+            "model": "AR-HP",
+            "description": "airRouter HP 6 dBi Omni",
+            "gain": 6,
+            "beamwidth": 360
+        },
+        {
+            "model": "UB24EWIFIDBI",
+            "description": "KP Performance Antenna, 19 dBi 12&deg; Dish",
+            "gain": 19,
+            "beamwidth": 12
+        },
+        {
+            "model": "AS24G17B90MS-KU",
+            "description": "Altelix 17 dBi 90&deg; Sector",
+            "gain": 17,
+            "beamwidth": 90
+        },
+        {
+            "model": "TL-ANT2424MD",
+            "description": "TP-Link 24 dBi 6&deg; Dish",
+            "gain": 24,
+            "beamwidth": 6
+        },
+        {
+            "model": "Tupavco-TP511",
+            "description": "Tupavco TP511 20 dBi 18&deg; Panel",
+            "gain": 20,
+            "beamwidth": 18
+        },
+        {
+            "model": "Generic-Omni",
+            "description": "Generic Omni",
+            "gain": 0,
+            "beamwidth": 360
+        },
+        {
+            "model": "Generic-Sector-120",
+            "description": "Generic 120&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-90",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-60",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 60
+        },
+        {
+            "model": "Generic-Sector-45",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 45
+        },
+        {
+            "model": "Generic-Dish-10",
+            "description": "Generic 10&deg; Dish",
+            "gain": 0,
+            "beamwidth": 10
+        },
+        {
+            "model": "Generic-Dish-6",
+            "description": "Generic 6&deg; Dish",
+            "gain": 0,
+            "beamwidth": 6
+        },
+        {
+            "model": "Generic-Dish-3",
+            "description": "Generic 3&deg; Dish",
+            "gain": 0,
+            "beamwidth": 3
+        }
+    ],
+    "3GHz": [
+        {
+            "model": "",
+            "description": "None"
+        },
+        {
+            "model": "unknown",
+            "description": "Unknown"
+        },
+        {
+            "model": "UB24EWIFIDBI",
+            "description": "KP Performance Antenna, 21 dBi 9&deg; Dish",
+            "gain": 21,
+            "beamwidth": 9
+        },
+        {
+            "model": "RD-3G26",
+            "description": "airMAX 3 GHz, 26 dBi 7&deg; RocketDish",
+            "gain": 26,
+            "beamwidth": 7
+        },
+        {
+            "model": "AM-3G18-120",
+            "description": "airMAX 3 GHz, 18 dBi, 120&deg; Sector",
+            "gain": 18,
+            "beamwidth": 120
+        },
+        {
+            "model": "AMO-3G12",
+            "description": "airMAX 3 GHz, 12 dBi Omni",
+            "gain": 12,
+            "beamwidth": 360
+        },
+        {
+            "model": "Generic-Omni",
+            "description": "Generic Omni",
+            "gain": 0,
+            "beamwidth": 360
+        },
+        {
+            "model": "Generic-Sector-120",
+            "description": "Generic 120&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-90",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-60",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 60
+        },
+        {
+            "model": "Generic-Sector-45",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 45
+        },
+        {
+            "model": "Generic-Dish-10",
+            "description": "Generic 10&deg; Dish",
+            "gain": 0,
+            "beamwidth": 10
+        },
+        {
+            "model": "Generic-Dish-6",
+            "description": "Generic 6&deg; Dish",
+            "gain": 0,
+            "beamwidth": 6
+        },
+        {
+            "model": "Generic-Dish-3",
+            "description": "Generic 3&deg; Dish",
+            "gain": 0,
+            "beamwidth": 3
+        }
+    ],
+    "5GHz": [
+        {
+            "model": "",
+            "description": "None"
+        },
+        {
+            "model": "unknown",
+            "description": "Unknown"
+        },
+        {
+            "model": "AMO-5G10",
+            "description": "airMAX 5 GHz, 10 dBi Omni",
+            "gain": 10,
+            "beamwidth": 360
+        },
+        {
+            "model": "AMO-5G13",
+            "description": "airMAX 5 GHz, 13 dBi Omni",
+            "gain": 10,
+            "beamwidth": 360
+        },
+        {
+            "model": "AM-5G16-120",
+            "description": "airMAX 5 GHz, 16 dBi 120&deg; Sector",
+            "gain": 16,
+            "beamwidth": 120
+        },
+        {
+            "model": "AM-5G17-90",
+            "description": "airMAX 5 GHz, 17 dBi 90&deg; Sector",
+            "gain": 17,
+            "beamwidth": 90
+        },
+        {
+            "model": "AM-5G19-120",
+            "description": "airMAX 5 GHz, 19 dBi 120&deg; Sector",
+            "gain": 19,
+            "beamwidth": 120
+        },
+        {
+            "model": "AM-5G20-90",
+            "description": "airMAX 5 GHz, 20 dBi 90&deg; Sector",
+            "gain": 20,
+            "beamwidth": 90
+        },
+        {
+            "model": "AM-5AC21-60",
+            "description": "airMAX AC 5 GHz, 21 dBi, 60&deg; Sector",
+            "gain": 21,
+            "beamwidth": 60
+        },
+        {
+            "model": "AM-5AC22-45",
+            "description": "airMAX AC 5 GHz, 22 dBi, 45&deg; Sector",
+            "gain": 22,
+            "beamwidth": 45
+        },
+        {
+            "model": "AP-5AC-90-HD",
+            "description": "airPRISM 3x30&deg; HD Sector",
+            "gain": 22,
+            "beamwidth": 30
+        },
+        {
+            "model": "AF-5G23-S45",
+            "description": "airFiber X 5 GHz, 23 dBi 10&deg;, Slant 45 Dish",
+            "gain": 23,
+            "beamwidth": 10
+        },
+        {
+            "model": "AF-5G30-S45",
+            "description": "airFiber X 5 GHz, 30 dBi 5.8&deg;, Slant 45 Dish",
+            "gain": 30,
+            "beamwidth": 5.8
+        },
+        {
+            "model": "AF-5G34-S45",
+            "description": "airFiber X 5 GHz, 34 dBi 3&deg;, Slant 45 Dish",
+            "gain": 34,
+            "beamwidth": 3
+        },
+        {
+            "model": "RD-5G30",
+            "description": "airMAX 5 GHz, 30 dBi 5&deg; RocketDish",
+            "gain": 30,
+            "beamwidth": 5
+        },
+        {
+            "model": "RD-5G30-LW",
+            "description": "airMAX 5 GHz, 30 dBi 5.8&deg; RocketDish Light Weight",
+            "gain": 30,
+            "beamwidth": 5.8
+        },
+        {
+            "model": "RD-5G31-AC",
+            "description": "airMAX AC 5 GHz, 31 dBi 4&deg; RocketDish",
+            "gain": 31,
+            "beamwidth": 4
+        },
+        {
+            "model": "RD-5G34",
+            "description": "airMAX 5 GHz, 34 dBi 3&deg; RocketDish",
+            "gain": 34,
+            "beamwidth": 3
+        },
+        {
+            "model": "Horn-5-90",
+            "description": "airMAX PrismStation Horn, 13 dBi 90&deg;",
+            "gain": 13,
+            "beamwidth": 90
+        },
+        {
+            "model": "Horn-5-60",
+            "description": "airMAX PrismStation Horn, 16 dBi 60&deg;",
+            "gain": 16,
+            "beamwidth": 60
+        },
+        {
+            "model": "Horn-5-45",
+            "description": "airMAX PrismStation Horn, 15.5 dBi 45&deg;",
+            "gain": 15.5,
+            "beamwidth": 45
+        },
+        {
+            "model": "Horn-5-30",
+            "description": "airMAX PrismStation Horn, 19 dBi 30&deg;",
+            "gain": 19,
+            "beamwidth": 30
+        },
+        {
+            "model": "NBM5-22",
+            "description": "airMAX NanoBridge M5, 22 dBi 8&deg; dish;",
+            "gain": 22,
+            "beamwidth": 8
+        },
+        {
+            "model": "NBM5-25",
+            "description": "airMAX NanoBridge M5, 25 dBi 8&deg; dish",
+            "gain": 25,
+            "beamwidth": 8
+        },        
+        {
+            "model": "STH-30-USMA",
+            "description": "RF Elements StarterHorn&trade; 30 USMA, 18 dBi 30&deg; Horn",
+            "gain": 18,
+            "beamwidth": 30
+        },
+        {
+            "model": "UB24EWIFIDBI",
+            "description": "KP Performance Antenna, 25 dBi 6&deg; Dish",
+            "gain": 25,
+            "beamwidth": 6
+        },
+        {
+            "model": "AS5158G18B65Ms-NF",
+            "description": "Altelix 18 dBi 65&deg; Sector",
+            "gain": 18,
+            "beamwidth": 65
+        },
+        {
+            "model": "TL-ANT5830MD",
+            "description": "TP-Link 30 dBi 6&deg; Dish",
+            "gain": 30,
+            "beamwidth": 6
+        },
+        {
+            "model": "MTAS-5G-15D120",
+            "description": "Mikrotik 15 dBi 120&deg; Sector",
+            "gain": 15,
+            "beamwidth": 120
+        },
+        {
+            "model": "MTAS-5G-19D120",
+            "description": "Mikrotik 19 dBi 120&deg; Sector",
+            "gain": 19,
+            "beamwidth": 120
+        },
+        {
+            "model": "MTAD-5G-30D3",
+            "description": "Mikrotik 30 dBi 5&deg; Dish",
+            "gain": 30,
+            "beamwidth": 5
+        },
+        {
+            "model": "MTAD-5G-30D3-PA",
+            "description": "Mikrotik 30 dBi 5&deg; Dish (PA)",
+            "gain": 30,
+            "beamwidth": 5
+        },
+        {
+            "model": "Generic-Omni",
+            "description": "Generic Omni",
+            "gain": 0,
+            "beamwidth": 360
+        },
+        {
+            "model": "Generic-Sector-120",
+            "description": "Generic 120&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-90",
+            "description": "Generic 90&deg; Sector",
+            "gain": 0,
+            "beamwidth": 90
+        },
+        {
+            "model": "Generic-Sector-60",
+            "description": "Generic 60&deg; Sector",
+            "gain": 0,
+            "beamwidth": 60
+        },
+        {
+            "model": "Generic-Sector-45",
+            "description": "Generic 45&deg; Sector",
+            "gain": 0,
+            "beamwidth": 45
+        },
+        {
+            "model": "Generic-Dish-10",
+            "description": "Generic 10&deg; Dish",
+            "gain": 0,
+            "beamwidth": 10
+        },
+        {
+            "model": "Generic-Dish-6",
+            "description": "Generic 6&deg; Dish",
+            "gain": 0,
+            "beamwidth": 6
+        },
+        {
+            "model": "Generic-Dish-3",
+            "description": "Generic 3&deg; Dish",
+            "gain": 0,
+            "beamwidth": 3
+        }
+    ]
+}

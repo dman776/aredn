@@ -1,6 +1,5 @@
-config settings settings
-        option  config  ""
-        option  node	""
-        option  tactical	""
-	option	mac2	""
-	option	boot_wait	""
+config settings 'settings'
+        option node ''
+        option tactical ''
+        option mac2 ''
+        option configured '0'

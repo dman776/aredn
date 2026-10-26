@@ -1,0 +1,687 @@
+/*
+ * Part of AREDN® -- Used for creating Amateur Radio Emergency Data Networks
+ * Copyright (C) 2024 Tim Wilkinson
+ * See Contributors file for additional contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Additional Terms:
+ *
+ * Additional use restrictions exist on the AREDN® trademark and logo.
+ * See AREDNLicense.txt for more info.
+ *
+ * Attributions to the AREDN® Project must be retained in the source code.
+ * If importing this code into a new or existing project attribution
+ * to the AREDN® project must be added to the source code.
+ *
+ * You must not misrepresent the origin of the material contained within.
+ *
+ * Modified versions must be modified to attribute to the original source
+ * and be marked in reasonable ways as differentiate it from the original
+ * version
+ */
+
+import * as fs from "fs";
+import * as uci from "uci";
+import * as math from "math";
+import * as network from "aredn.network";
+import * as hardware from "aredn.hardware";
+
+let cursor;
+let scursor;
+let setupChanged = false;
+let firmwareVersion = null;
+
+const currentConfig = "/tmp/config.current";
+const modalConfig = "/tmp/config.modal";
+const configDirs = [
+    "/etc",
+    "/etc/arednlink",
+    "/etc/config.mesh",
+    "/etc/local",
+    "/etc/local/uci",
+    "/etc/aredn_include",
+    "/etc/dropbear",
+    "/tmp",
+    "/var/run"
+];
+const configFiles = [
+    "/etc/config.mesh/aredn",
+    "/etc/config.mesh/babel",
+    "/etc/config.mesh/dhcp",
+    "/etc/config.mesh/dropbear",
+    "/etc/config.mesh/firewall",
+    "/etc/config.mesh/firewall.user",
+    "/etc/config.mesh/network",
+    "/etc/config.mesh/setup",
+    "/etc/config.mesh/snmpd",
+    "/etc/config.mesh/system",
+    "/etc/config.mesh/uhttpd",
+    "/etc/config.mesh/vtun",
+    "/etc/config.mesh/wireguard",
+    "/etc/config.mesh/xlink",
+    "/etc/arednlink/hosts",
+    "/etc/arednlink/services",
+    "/etc/arednlink/publish",
+    "/etc/arednlink/subscribe",
+    "/etc/local/uci/hsmmmesh",
+    "/etc/aredn_include/babel-deny.conf",
+    "/etc/dropbear/authorized_keys",
+    "/tmp/newpassword"
+];
+
+function initCursor()
+{
+    if (!cursor) {
+        cursor = uci.cursor("/etc/local/uci");
+    }
+};
+
+function initSetup()
+{
+    if (!scursor) {
+        scursor = uci.cursor("/etc/config.mesh");
+    }
+};
+
+export function reset()
+{
+    cursor = null;
+    scursor = null;
+    setupChanged = false;
+};
+
+export function shellEscape(str)
+{
+    return '"' + replace(str, /(["'$`\\])/g, '\\$1') + '"';
+};
+
+export function getSettingAsString(key, def)
+{
+    initSetup();
+    return scursor.get("setup", "globals", key) || def;
+};
+
+export function getSettingAsInt(key, def)
+{
+    initSetup();
+    const v = scursor.get("setup", "globals", key);
+    const iv = int(v);
+    if (iv == v) {
+        return iv;
+    }
+    return def;
+};
+
+export function getSettingAsList(key, def)
+{
+    initSetup();
+    return scursor.get("setup", "globals", key) || def;
+};
+
+export function setSettingAsString(key, value, def)
+{
+    initSetup();
+    const o = scursor.get("setup", "globals", key);
+    const n = replace(`${value ?? def ?? ""}`, /[\r\n]/g, " ");
+    if (o !== n) {
+        scursor.set("setup", "globals", key, n);
+        setupChanged = true;
+        return true;
+    }
+    return false;
+};
+
+export function setSettingAsList(key, value, def)
+{
+    initSetup();
+    const o = scursor.get("setup", "globals", key) ?? "";
+    if (type(value) !== "array") {
+        value = type(def) === "array" ? def : [];
+    }
+    if (length(value) === 0) {
+        value = "";
+    }
+    if (sprintf("%$J", o) !== sprintf("%J", value)) {
+        scursor.set("setup", "globals", key, value);
+        setupChanged = true;
+        return true;
+    }
+    return false;
+};
+
+export function saveSettings()
+{
+    if (setupChanged) {
+        scursor.commit("setup");
+        setupChanged = false;
+    }
+};
+
+export function getName()
+{
+    initCursor();
+    return cursor.get("hsmmmesh", "settings", "node");
+};
+
+export function setName(name)
+{
+    initCursor();
+    cursor.set("hsmmmesh", "settings", "node", name);
+    cursor.commit("hsmmmesh");
+};
+
+export function getFirmwareVersion()
+{
+    if (firmwareVersion === null) {
+        firmwareVersion = trim(fs.readfile("/etc/mesh-release"));
+    }
+    return firmwareVersion;
+};
+
+export function isConfigured()
+{
+    initCursor();
+    return cursor.get("hsmmmesh", "settings", "configured") !== "0";
+};
+
+export function setConfigured(v)
+{
+    initCursor();
+    cursor.set("hsmmmesh", "settings", "configured", v);
+    cursor.commit("hsmmmesh");
+};
+
+export function getDefaultIP()
+{
+    initCursor();
+    const mac2 = cursor.get("hsmmmesh", "settings", "mac2");
+    if (mac2) {
+        return `10.${mac2}`;
+    }
+    else {
+        return "192.168.1.1";
+    }
+};
+
+export function getIP()
+{
+    return uci.cursor().get("network", "mesh", "ipaddr");
+};
+
+export function setPassword(passwd)
+{
+    fs.writefile("/tmp/newpassword", passwd);
+};
+
+export function getDHCP(mode)
+{
+    initSetup();
+    const setup = scursor.get_all("setup", "globals");
+    if (mode === "nat" || (!mode && setup.dmz_mode === "0")) {
+        const i = iptoarr(setup.lan_ip);
+        const m = iptoarr(setup.lan_mask);
+        const b = ((i[2] & m[2]) * 256 + (i[3] & m[3]));
+        const s = b + int(setup.dhcp_start);
+        const e = b + int(setup.dhcp_end);
+        return {
+            enabled: setup.lan_dhcp !== "0" ? true : false,
+            mode: 0,
+            base: `${i[0]}.${i[1]}.${(b >> 8) & 255}.${b & 255}`,
+            start: `${i[0]}.${i[1]}.${(s >> 8) & 255}.${s & 255}`,
+            end: `${i[0]}.${i[1]}.${(e >> 8) & 255}.${e & 255}`,
+            gateway: setup.lan_ip,
+            mask: setup.lan_mask,
+            cidr: network.netmaskToCIDR(setup.lan_mask)
+        };
+    }
+    else if (setup.dmz_mode === "1") {
+        const i = iptoarr(setup.lan_ip);
+        const m = iptoarr(setup.lan_mask);
+        const b = ((i[2] & m[2]) * 256 + (i[3] & m[3]));
+        const s = b + int(setup.dhcp_start);
+        const e = b + int(setup.dhcp_end);
+        return {
+            enabled: setup.lan_dhcp !== "0" ? true : false,
+            mode: 1,
+            base: `${i[0]}.${i[1]}.${(b >> 8) & 255}.${b & 255}`,
+            start: `${i[0]}.${i[1]}.${(s >> 8) & 255}.${s & 255}`,
+            end: `${i[0]}.${i[1]}.${(e >> 8) & 255}.${e & 255}`,
+            gateway: setup.lan_ip,
+            mask: setup.lan_mask,
+            cidr: network.netmaskToCIDR(setup.lan_mask)
+        };
+    }
+    else {
+        const i = iptoarr(setup.dmz_lan_ip);
+        const m = iptoarr(setup.dmz_lan_mask);
+        const b = ((i[2] & m[2]) * 256 + (i[3] & m[3]));
+        const s = b + int(setup.dmz_dhcp_start);
+        const e = b + int(setup.dmz_dhcp_end);
+        return {
+            enabled: setup.lan_dhcp !== "0" ? true : false,
+            mode: int(setup.dmz_mode),
+            base: `${i[0]}.${i[1]}.${(b >> 8) & 255}.${b & 255}`,
+            start: `${i[0]}.${i[1]}.${(s >> 8) & 255}.${s & 255}`,
+            end: `${i[0]}.${i[1]}.${(e >> 8) & 255}.${e & 255}`,
+            gateway: setup.dmz_lan_ip,
+            mask: setup.dmz_lan_mask,
+            cidr: network.netmaskToCIDR(setup.dmz_lan_mask)
+        };
+    }
+};
+
+export function getActiveNetworkInterfaceNames(net)
+{
+    initSetup();
+    const ports = scursor.get("setup", "globals", `${net}_intf`);
+    if (ports) {
+        if (ports[0] === "none") {
+            return [];
+        }
+        return ports;
+    }
+    return hardware.getBoardNetworkInterfaceName(net);
+};
+
+function copyConfig(configRoot)
+{
+    fs.mkdir(configRoot);
+    for (let i = 0; i < length(configDirs); i++) {
+        fs.mkdir(`${configRoot}${configDirs[i]}`);
+    }
+    for (let i = 0; i < length(configFiles); i++) {
+        const entry = configFiles[i];
+        if (fs.access(entry)) {
+            fs.writefile(`${configRoot}${entry}`, fs.readfile(entry));
+        }
+    }
+};
+
+function removeConfig(configRoot)
+{
+    for (let i = 0; i < length(configFiles); i++) {
+        fs.unlink(`${configRoot}${configFiles[i]}`);
+    }
+    for (let i = length(configDirs) - 1; i >= 0; i--) {
+        fs.rmdir(`${configRoot}${configDirs[i]}`);
+    }
+    fs.rmdir(configRoot);
+};
+
+function revertConfig(configRoot)
+{
+    if (fs.access(`${configRoot}/etc/config.mesh/setup`)) {
+        for (let i = 0; i < length(configFiles); i++) {
+            const to = configFiles[i];
+            const from = `${configRoot}${to}`;
+            if (fs.access(from)) {
+                fs.writefile(to, fs.readfile(from));
+                fs.unlink(from);
+            }
+            else {
+                fs.unlink(to);
+            }
+        }
+        for (let i = length(configDirs) - 1; i >= 0; i--) {
+            fs.rmdir(`${configRoot}${configDirs[i]}`);
+        }
+        fs.rmdir(configRoot);
+    }
+};
+
+export function prepareChanges()
+{
+    if (!fs.access(`${currentConfig}/etc/config.mesh/setup`)) {
+        copyConfig(currentConfig);
+    }
+};
+
+export function prepareModalChanges()
+{
+    if (fs.access(`${modalConfig}/etc/config.mesh/setup`)) {
+        removeConfig(modalConfig);
+    }
+    copyConfig(modalConfig);
+};
+
+function fileChanges(from, to)
+{
+    let count = 0;
+    const p = fs.popen(`exec /usr/bin/diff -NBbdiU0 ${from} ${to}`);
+    if (p) {
+        for (;;) {
+            const l = rtrim(p.read("line"));
+            if (!l) {
+                break;
+            }
+            if (index(l, "@@") === 0) {
+                const v = match(l, /^@@ [+-]\d+,?(\d*) [+-]\d+,?(\d*) @@$/);
+                if (v) {
+                    count += max(math.abs(int(v[1] === "" ? 1 : v[1])), math.abs(int(v[2] === "" ? 1 : v[2])));
+                }
+            }
+        }
+        p.close();
+    }
+    return count;
+};
+
+export function commitChanges()
+{
+    const status = {};
+    if (fs.access(`${currentConfig}/etc/config.mesh/setup`)) {
+        if (fileChanges(`${currentConfig}/etc/local/uci/hsmmmesh`, "/etc/local/uci/hsmmmesh") > 0) {
+            fs.mkdir("/tmp/reboot-required");
+            fs.writefile("/tmp/reboot-required/reboot", "");
+        }
+        removeConfig(modalConfig);
+        removeConfig(currentConfig);
+        if (fs.access("/tmp/newpassword")) {
+            const pw = fs.readfile("/tmp/newpassword");
+            system(`/usr/local/bin/setpasswd ${shellEscape(pw)} > /dev/null 2>&1`);
+            fs.unlink("/tmp/newpassword");
+            status.newpassword = true;
+        }
+        const n = fs.popen("exec /usr/local/bin/node-setup");
+        if (n) {
+            status.setup = n.read("all");
+            n.close();
+            const c = fs.popen("exec /usr/local/bin/restart-services");
+            if (c) {
+                status.restart = c.read("all");
+                c.close();
+            }
+        }
+    }
+    return status;
+};
+
+export function countChanges()
+{
+    let count = 0;
+    if (fs.access(`${currentConfig}/etc/config.mesh/setup`)) {
+        for (let i = 0; i < length(configFiles); i++) {
+            count += fileChanges(`${currentConfig}${configFiles[i]}`, configFiles[i]);
+        }
+    }
+    return count;
+};
+
+export function revertChanges()
+{
+    revertConfig(currentConfig);
+    removeConfig(modalConfig);
+};
+
+export function revertModalChanges()
+{
+    revertConfig(modalConfig);
+    if (countChanges() === 0) {
+        removeConfig(currentConfig);
+    }
+};
+
+// The order of these is important
+const specialCharacters = [
+    [ "&", "&amp;" ],
+    [ '"', "&quot;" ],
+    [ "'", "&apos;" ],
+    [ "<", "&lt;" ],
+    [ ">", "&gt;" ],
+    [ "\n", "&#10;" ]
+];
+
+export function escapeString(s)
+{
+    for (let i = 0; i < length(specialCharacters); i++) {
+        s = replace(s, specialCharacters[i][0], specialCharacters[i][1]);
+    }
+    return s;
+};
+
+export function unescapeString(s)
+{
+    for (let i = length(specialCharacters) - 1; i >= 0; i--) {
+        s = replace(s, specialCharacters[i][1], specialCharacters[i][0]);
+    }
+    return s;
+};
+
+export function backup(backupFilename)
+{
+    const fo = fs.open("/tmp/sysupgradefilelist", "w");
+    if (!fo) {
+        return false;
+    }
+    const fi = fs.open("/etc/arednsysupgrade.conf");
+    if (!fi) {
+        fo.close();
+        return null;
+    }
+    for (let l = fi.read("line"); length(l); l = fi.read("line")) {
+        if (!match(l, "^#") && fs.access(trim(l))) {
+            fo.write(l);
+        }
+    }
+    fi.close();
+    const fu = fs.lsdir("/etc/arednsysupgrade.d");
+    if (fu) {
+        for (let i = 0; i < length(fu); i++) {
+            const ub = fs.open(`/etc/arednsysupgrade.d/${fu[i]}`);
+            if (ub) {
+                for (let l = ub.read("line"); length(l); l = ub.read("line")) {
+                    if (!match(l, "^#") && fs.access(trim(l))) {
+                        fo.write(l);
+                    }
+                }
+                ub.close();
+            }
+        }
+    }
+    fo.close();
+    const s = system(`/bin/tar -czf ${backupFilename} -T /tmp/sysupgradefilelist > /dev/null 2>&1`);
+    fs.unlink("/tmp/sysupgradefilelist");
+    if (s < 0) {
+        fs.unlink(backupFilename);
+        return false;
+    }
+    return true;
+};
+
+export function restore(backupFilename)
+{
+    const status = {};
+    const data = fs.readfile(backupFilename);
+    if (!data) {
+        status.error = "Failed to read configuration file";
+    }
+    else {
+        if (!fs.writefile("/sysupgrade.tgz", data)) {
+            status.error = "Failed to copy configuration file";
+        }
+    }
+    fs.unlink(backupFilename);
+    return status;
+};
+
+export function backupTunnels(tunnelBackupFilename)
+{
+    const s = system(`cd / ; /bin/tar -czf ${tunnelBackupFilename} etc/config.mesh/wireguard > /dev/null 2>&1`);
+    if (s < 0) {
+        fs.unlink(tunnelBackupFilename);
+        return false;
+    }
+    return true;
+};
+
+export function restoreTunnels(tunnelBackupFilename)
+{
+    const s = system(`cd / ; /bin/tar -xzf ${tunnelBackupFilename} etc/config.mesh/wireguard > /dev/null 2>&1`);
+    return s < 0 ? false : true;
+};
+
+export function supportdata(supportdatafilename)
+{
+    const wifiiface0 = fs.access("/sys/class/net/wlan0") ? "wlan0" : null;
+    const wifiiface1 = fs.access("/sys/class/net/wlan1") ? "wlan1" : null;
+    let doscan0 = false;
+    let doscan1 = false;
+    uci.cursor().foreach("wireless", "wifi-iface", function(s)
+    {
+        if (s.ifname == wifiiface0 && s.mode === "adhoc") {
+            doscan0 = true;
+        }
+        if (s.ifname == wifiiface1 && s.mode === "adhoc") {
+            doscan1 = true;
+        }
+    });
+
+    const files = [
+        "/proc/cpuinfo",
+        "/proc/meminfo",
+        "/etc/board.json",
+        "/etc/config",
+        "/etc/config.mesh",
+        "/etc/aredn_include",
+        "/etc/ethers",
+        "/etc/hosts",
+        "/etc/local",
+        "/etc/mesh-release",
+        "/etc/os-release",
+        "/etc/arednlink",
+        "/tmp/etc",
+        "/tmp/dnsmasq.d",
+        "/tmp/lqm.info",
+        "/tmp/wireless_monitor.json",
+        "/tmp/service-validation-state.json",
+        "/tmp/sysinfo",
+        "/tmp/dhcp.leases",
+        "/proc/net/nf_conntrack",
+        "/var/etc/babel-active.conf",
+        "/var/run/hostapd-wlan0.maclist",
+        "/var/run/hostapd-wlan1.maclist",
+        "/sys/kernel/debug/spi-nor/spi0.0/params"
+    ];
+    const sensitive = [
+        "/etc/config/network",
+        "/etc/config.mesh/wireguard",
+        "/etc/config/wireless",
+        "/etc/config.mesh/setup",
+    ];
+    const cmds = [
+        "df -k",
+        "free",
+        "dmesg",
+        "ifconfig",
+        "ethtool eth0",
+        "ethtool eth1",
+        "ip link",
+        "ip addr",
+        "ip neigh",
+        "ip route list",
+        "ip route list table 20",
+        "ip route list table 21",
+        "ip route list table 22",
+        "ip route list table 28",
+        "ip route list table 29",
+        "ip route list table main",
+        "ip route list table default",
+        "ip rule list",
+        "netstat -aln",
+        "iwinfo",
+        `${wifiiface0 ? "iwinfo " + wifiiface0 + " assoclist" : ""}`,
+        `${wifiiface0 ? "iw phy " + hardware.getPhyDevice(wifiiface0) + " info" : ""}`,
+        `${wifiiface0 ? "iw dev " + wifiiface0 + " info" : ""}`,
+        `${wifiiface0 && doscan0 ? "iw dev " + wifiiface0 + " scan" : ""}`,
+        `${wifiiface0 ? "iw dev " + wifiiface0 + " station dump" : ""}`,
+        `${wifiiface1 ? "iwinfo " + wifiiface1 + " assoclist" : ""}`,
+        `${wifiiface1 ? "iw phy " + hardware.getPhyDevice(wifiiface1) + " info" : ""}`,
+        `${wifiiface1 ? "iw dev " + wifiiface1 + " info" : ""}`,
+        `${wifiiface1 && doscan1 ? "iw dev " + wifiiface1 + " scan" : ""}`,
+        `${wifiiface1 ? "iw dev " + wifiiface1 + " station dump" : ""}`,
+        "wg show all",
+        "wg show all latest-handshakes",
+        "nft list ruleset",
+        "brctl show",
+        "babel-dump",
+        "/usr/local/bin/arednlink-dump",
+        "ls -l /var/run/arednlink/*/*",
+        "apk info",
+        "ps -w",
+        "/usr/local/bin/get_hardwaretype",
+        "/usr/local/bin/get_boardid",
+        "/usr/local/bin/get_model",
+        "/usr/local/bin/get_hardware_mfg",
+        "logread",
+    ];
+    if (trim(fs.popen("/usr/local/bin/get_hardware_mfg").read("all")) === "Ubiquiti") {
+        push(cmds, "cat /dev/mtd0|grep 'U-Boot'|head -n1");
+    }
+
+    system("/bin/rm -rf /tmp/sd");
+    system("/bin/mkdir -p /tmp/sd");
+
+    for (let i = 0; i < length(files); i++) {
+        const file = files[i];
+        const s = fs.stat(file);
+        if (s) {
+            if (s.type === "directory") {
+                system(`/bin/mkdir -p /tmp/sd${file}`);
+                system(`/bin/cp -rp ${file}/* /tmp/sd${file}/`);
+            }
+            else {
+                system(`/bin/mkdir -p /tmp/sd${fs.dirname(file)}`);
+                system(`/bin/cp -p ${file} /tmp/sd${file}`);
+            }
+        }
+    }
+
+    for (let i = 0; i < length(sensitive); i++) {
+        const file = sensitive[i];
+        const f = fs.open(file);
+        if (f) {
+            const lines = [];
+            for (let l = f.read("line"); length(l); l = f.read("line")) {
+                l = replace(l, /option passwd.+/, "option passwd '***HIDDEN***'\n");
+                l = replace(l, /option public_key.+/, "option public_key '***HIDDEN***'\n");
+                l = replace(l, /option private_key.+/, "option private_key '***HIDDEN***'\n");
+                l = replace(l, /option key.+/, "option key '***HIDDEN***'\n");
+                push(lines, l);
+            }
+            f.close();
+            fs.writefile(`/tmp/sd${file}`, join("", lines));
+        }
+    }
+
+    const f = fs.open("/tmp/sd/data.txt", "w");
+    if (f) {
+        for (let i = 0; i < length(cmds); i++) {
+            const cmd = cmds[i];
+            if (cmd) {
+                const p = fs.popen(`(${cmd}) 2> /dev/null`);
+                if (p) {
+                    f.write(`\n===\n========== ${cmd} ==========\n===\n`);
+                    f.write(p.read("all"));
+                    p.close();
+                }
+            }
+        }
+        f.close();
+    }
+
+    system(`/bin/tar -zcf ${supportdatafilename} -C /tmp/sd ./`);
+    system("/bin/rm -rf /tmp/sd");
+
+    return supportdatafilename;
+};
